@@ -51,9 +51,10 @@ export default function HistoricalPage({
   time = { formatted: 'THURSDAY, 03 SEPTEMBER 2026 · 06:00 PM IST', timeShort: '06:00 PM' },
   weather
 }: HistoricalPageProps) {
-  const [activeTab, setActiveTab] = useState<'decade' | 'compare' | 'seasonal' | 'table' | 'pinnAnalysis' | 'lookup'>('decade')
+  const [activeTab, setActiveTab] = useState<'seasonal' | 'table' | 'lookup'>('seasonal')
   const [selectedYear, setSelectedYear] = useState<number>(2026)
   const [selectedMonth, setSelectedMonth] = useState<number>(5)
+  const [archiveMonth, setArchiveMonth] = useState<number | 'all'>('all')
   const [selectedWard, setSelectedWard] = useState<string>(selectedLocation.zoneNumber)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRiskFilter, setSelectedRiskFilter] = useState<'ALL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL')
@@ -83,6 +84,16 @@ export default function HistoricalPage({
     return zoneRecords.filter(r => r.year === selectedYear)
   }, [zoneRecords, selectedYear])
 
+  const archiveMonths = useMemo(() => {
+    return Array.from(new Set(currentYearRecords.map(r => r.month))).sort((a, b) => a - b)
+  }, [currentYearRecords])
+
+  const activeArchiveMonth = archiveMonth === 'all' || archiveMonths.includes(archiveMonth) ? archiveMonth : 'all'
+
+  const archiveRecords = useMemo(() => {
+    return currentYearRecords.filter(r => activeArchiveMonth === 'all' || r.month === activeArchiveMonth)
+  }, [currentYearRecords, activeArchiveMonth])
+
   // Overall Statistics for this zone across the 128 months
   const maxRecordedLST = useMemo(() => {
     return zoneRecords.length ? Math.max(...zoneRecords.map(r => r.avgLST)) : 42.0
@@ -109,14 +120,15 @@ export default function HistoricalPage({
   // Download filtered or full CSV
   const handleDownloadCSV = () => {
     const csvHeader = 'Year_Month,Year,Month,Ward,Location,Risk_Level,Latitude,Longitude,Avg_LST_C,PINN_Predicted_LST,RF_Predicted_LST,Residual_Error,NDVI,NDBI,NDWI,Albedo,Month_Data_Source\n'
-    const csvRows = zoneRecords.map(r =>
+    const csvRows = archiveRecords.map(r =>
       [r.yearMonth, r.year, r.month, `"${r.ward}"`, `"${r.location}"`, r.riskLevel, r.lat, r.lon, r.avgLST, r.pinnPredictedLST, r.rfPredictedLST, r.residualError, r.ndvi, r.ndbi, r.ndwi, r.albedo, `"${r.monthDataSource}"`].join(',')
     ).join('\n')
     const blob = new Blob([csvHeader + csvRows], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.setAttribute('href', url)
-    link.setAttribute('download', `${selectedWard.replace(' ', '_')}_historical_pinn_dataset.csv`)
+    const monthSuffix = activeArchiveMonth === 'all' ? '' : `_${String(activeArchiveMonth).padStart(2, '0')}`
+    link.setAttribute('download', `${selectedWard.replace(' ', '_')}_${selectedYear}${monthSuffix}_historical_pinn_dataset.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -176,13 +188,8 @@ export default function HistoricalPage({
         })}
       </div>
 
-      {/* 4 Key Summary Metric Cards */}
-      <div className="hist-kpi-row" style={{ marginBottom: 24 }}>
-        <div className="hist-kpi-card orange">
-          <span className="hist-kpi-label">Decadal Peak LST</span>
-          <strong className="hist-kpi-value">{maxRecordedLST.toFixed(1)}°C</strong>
-          <small>Highest summer peak in {activeLoc.name}</small>
-        </div>
+      {/* 3 Key Summary Metric Cards */}
+      <div className="hist-kpi-row hist-kpi-row-3" style={{ marginBottom: 24 }}>
         <div className="hist-kpi-card blue">
           <span className="hist-kpi-label">10-Year Mean LST</span>
           <strong className="hist-kpi-value">{avgZoneLST.toFixed(1)}°C</strong>
@@ -198,21 +205,13 @@ export default function HistoricalPage({
           <strong className="hist-kpi-value">{zoneMetric.pinnMAE.toFixed(3)}°C</strong>
           <small>{zoneMetric.improvement} superior vs RF ({zoneMetric.rfMAE.toFixed(3)}°C)</small>
         </div>
-        <div className="hist-kpi-card purple">
-          <span className="hist-kpi-label">Observations Available</span>
-          <strong className="hist-kpi-value">{zoneRecords.length}</strong>
-          <small>100% complete Jan 2016 – Aug 2026</small>
-        </div>
       </div>
 
       {/* Historical Navigation Tabs */}
       <div className="hist-tabs" style={{ marginBottom: 20 }}>
         {[
-          { id: 'decade', label: '📈 10-Year Trajectory (2016–2026)' },
-          { id: 'compare', label: '⚖️ PINN vs RF Benchmark' },
           { id: 'seasonal', label: '🌤️ 12-Month Seasonal Profile' },
           { id: 'table', label: '📋 Full Dataset Records (2,304)' },
-          { id: 'pinnAnalysis', label: '🧠 Physics Constraints & Proof' },
           { id: 'lookup', label: '🔍 Precise LST Lookup' },
         ].map(t => (
           <button
@@ -226,131 +225,6 @@ export default function HistoricalPage({
         ))}
       </div>
 
-      {/* ── TAB 1: 10-YEAR TRAJECTORY ── */}
-      {activeTab === 'decade' && (
-        <div className="hist-section">
-          <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>Annual Climate Trend & Multi-Spectral Progression · {activeLoc.name}</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#77736b' }}>
-                  Tracking annual average LST, summer peak LST, NDVI greening, and NDBI built-up impervious expansion from 2016 to 2026.
-                </p>
-              </div>
-            </div>
-
-            {/* Annual Bar / Progress comparison */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-              {yearlySummary.map(ys => (
-                <div
-                  key={ys.year}
-                  style={{
-                    background: selectedYear === ys.year ? 'rgba(232, 102, 49, 0.12)' : 'rgba(255,255,255,0.03)',
-                    border: '1px solid',
-                    borderColor: selectedYear === ys.year ? '#e86631' : 'rgba(255,255,255,0.06)',
-                    borderRadius: 10,
-                    padding: 16,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onClick={() => setSelectedYear(ys.year)}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{ fontSize: 16, fontWeight: 700, color: '#2a2824' }}>Year {ys.year}</span>
-                    <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: '#3a3630' }}>
-                      {ys.observations} Months
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
-                    <div>
-                      <span style={{ color: '#88837a', fontSize: 11 }}>Mean LST</span>
-                      <div style={{ fontWeight: 700, color: '#f97316', fontSize: 15 }}>{ys.avgLST}°C</div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#88837a', fontSize: 11 }}>Summer Peak</span>
-                      <div style={{ fontWeight: 700, color: '#ef4444', fontSize: 15 }}>{ys.maxLST}°C</div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#88837a', fontSize: 11 }}>Vegetation (NDVI)</span>
-                      <div style={{ fontWeight: 600, color: '#22c55e' }}>{ys.avgNDVI}</div>
-                    </div>
-                    <div>
-                      <span style={{ color: '#88837a', fontSize: 11 }}>Built-up (NDBI)</span>
-                      <div style={{ fontWeight: 600, color: '#cbd5e1' }}>{ys.avgNDBI}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                    <span style={{ color: '#4ade80' }}>PINN Error: ±{ys.pinnMAE}°C</span>
-                    <span style={{ color: '#f59e0b' }}>RF Error: ±{ys.rfMAE}°C</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 2: PINN VS RF BENCHMARK ── */}
-      {activeTab === 'compare' && (
-        <div className="hist-section">
-          <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
-            <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>All 18 Zones Comparative Performance Matrix</h2>
-            <p style={{ margin: '6px 0 20px', fontSize: 13, color: '#77736b' }}>
-              Rigorous test-set benchmark validating that PINN maintains sub-0.35°C error across coastal, industrial, and valley microclimates.
-            </p>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ background: '#f8f4ee', color: '#3a3630' }}>
-                    <th style={{ padding: '10px 14px' }}>Ward</th>
-                    <th style={{ padding: '10px 14px' }}>Zone Name</th>
-                    <th style={{ padding: '10px 14px' }}>Topology / Microclimate</th>
-                    <th style={{ padding: '10px 14px' }}>Vulnerability</th>
-                    <th style={{ padding: '10px 14px' }}>Observed Peak</th>
-                    <th style={{ padding: '10px 14px', color: '#4ade80' }}>PINN MAE</th>
-                    <th style={{ padding: '10px 14px', color: '#fbbf24' }}>RF MAE</th>
-                    <th style={{ padding: '10px 14px', color: '#60a5fa' }}>PINN Superiority</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {THANE_ZONES_METRIC_SUMMARY.map(z => (
-                    <tr
-                      key={z.ward}
-                      style={{
-                        borderBottom: '1px solid #f0ece3',
-                        background: z.ward === selectedWard ? 'rgba(232, 102, 49, 0.1)' : 'transparent'
-                      }}
-                    >
-                      <td style={{ padding: '10px 14px', fontWeight: 700 }}>{z.ward}</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 600 }}>{z.areaName}</td>
-                      <td style={{ padding: '10px 14px', color: '#5f5b54' }}>{z.zoneType}</td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <span style={{
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background: z.vulnerability === 'High' ? 'rgba(239,68,68,0.2)' : z.vulnerability === 'Moderate' ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.2)',
-                          color: z.vulnerability === 'High' ? '#f87171' : z.vulnerability === 'Moderate' ? '#fbbf24' : '#4ade80'
-                        }}>
-                          {z.vulnerability}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#ef4444' }}>{z.maxLST}°C</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#4ade80' }}>{z.pinnMAE.toFixed(3)}°C</td>
-                      <td style={{ padding: '10px 14px', color: '#fbbf24' }}>{z.rfMAE.toFixed(3)}°C</td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#60a5fa' }}>{z.improvement}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── TAB 3: SEASONAL PROFILE ── */}
       {activeTab === 'seasonal' && (
@@ -399,16 +273,21 @@ export default function HistoricalPage({
               <div>
                 <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>Full Multi-Spectral Dataset Archive</h2>
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: '#77736b' }}>
-                  Showing records for <strong>{activeLoc.name} ({selectedWard})</strong>. Total zone records: {zoneRecords.length}.
+                  Showing {archiveRecords.length} of {zoneRecords.length} records for <strong>{activeLoc.name} ({selectedWard})</strong> · {activeArchiveMonth === 'all' ? 'All months' : HIST_MONTH_NAMES[activeArchiveMonth - 1]} {selectedYear}.
                 </p>
               </div>
 
-              {/* Year Filter */}
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: '#88837a', fontWeight: 600 }}>YEAR:</span>
+              {/* Archive Filters */}
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#88837a', fontWeight: 600 }}>YEAR:</span>
                 <select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  aria-label="Filter archive by year"
+                  onChange={(e) => {
+                    setSelectedYear(Number(e.target.value))
+                    setArchiveMonth('all')
+                  }}
                   style={{
                     background: '#fffdf8',
                     color: '#2a2824',
@@ -422,6 +301,28 @@ export default function HistoricalPage({
                     <option key={yr} value={yr}>Year {yr}</option>
                   ))}
                 </select>
+                </label>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: '#88837a', fontWeight: 600 }}>MONTH:</span>
+                  <select
+                    value={activeArchiveMonth}
+                    aria-label="Filter archive by month"
+                    onChange={(e) => setArchiveMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                    style={{
+                      background: '#fffdf8',
+                      color: '#2a2824',
+                      border: '1px solid #dfd9cc',
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      fontSize: 13
+                    }}
+                  >
+                    <option value="all">All months</option>
+                    {archiveMonths.map(month => (
+                      <option key={month} value={month}>{HIST_MONTH_NAMES[month - 1]}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
             </div>
 
@@ -440,11 +341,10 @@ export default function HistoricalPage({
                     <th style={{ padding: '8px 10px' }}>NDBI</th>
                     <th style={{ padding: '8px 10px' }}>NDWI</th>
                     <th style={{ padding: '8px 10px' }}>Albedo</th>
-                    <th style={{ padding: '8px 10px' }}>Source</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {currentYearRecords.map((r, i) => (
+                  {archiveRecords.map((r, i) => (
                     <tr
                       key={`${r.yearMonth}-${i}`}
                       style={{
@@ -476,9 +376,15 @@ export default function HistoricalPage({
                       <td style={{ padding: '8px 10px', color: '#cbd5e1' }}>{r.ndbi.toFixed(3)}</td>
                       <td style={{ padding: '8px 10px', color: '#60a5fa' }}>{r.ndwi.toFixed(3)}</td>
                       <td style={{ padding: '8px 10px', color: '#93c5fd' }}>{r.albedo.toFixed(3)}</td>
-                      <td style={{ padding: '8px 10px', fontSize: 11, color: '#9b968d' }}>{r.monthDataSource}</td>
                     </tr>
                   ))}
+                  {archiveRecords.length === 0 && (
+                    <tr>
+                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#77736b' }}>
+                        No records available for this year and month.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -486,59 +392,6 @@ export default function HistoricalPage({
         </div>
       )}
 
-      {/* ── TAB 5: PINN ANALYSIS ── */}
-      {activeTab === 'pinnAnalysis' && (
-        <div className="hist-section">
-          <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
-            <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>Governing Physical Laws & PDE Formulations</h2>
-            <p style={{ margin: '6px 0 20px', fontSize: 13, color: '#77736b' }}>
-              Unlike black-box regressors, our PINN strictly enforces 4 foundational thermodynamic and heat conduction equations during model backpropagation.
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-              {[
-                {
-                  title: '1. Surface Energy Balance PDE',
-                  eq: '∂T/∂t = κ ∇²T + Q_solar(1 - α) - ε σ T⁴',
-                  desc: 'Governs transient heat conduction through soil and concrete masses, balancing solar radiation against thermal emissivity.',
-                  status: 'Enforced via Autograd Loss (λ=0.02)'
-                },
-                {
-                  title: '2. Monotonic Vegetation Cooling',
-                  eq: '∂(LST)/∂(NDVI) ≤ 0 (Strict Negative Slope)',
-                  desc: 'Evapotranspiration by tree canopy and mangrove creek fringes is strictly enforced to cool land surface temperature.',
-                  status: 'Enforced via ReLU Penalty (λ=0.08)'
-                },
-                {
-                  title: '3. Built-up Impervious Thermal Mass',
-                  eq: '∂(LST)/∂(NDBI) ≥ 0 (Strict Positive Slope)',
-                  desc: 'Denser asphalt roads and concrete high-rises retain heat energy, monotonically driving higher surface thermal load.',
-                  status: 'Enforced via ReLU Penalty (λ=0.08)'
-                },
-                {
-                  title: '4. Stefan-Boltzmann Thermal Radiation',
-                  eq: 'R_rad = ε · σ · (T_surface + 273.15)⁴',
-                  desc: 'Governs nighttime cooling dissipation across the Ulhas River basin and Vasai Creek water corridor.',
-                  status: 'Continuous Radiative Cooling Limit'
-                }
-              ].map(law => (
-                <div key={law.title} style={{ background: '#fbf9f4', border: '1px solid #e8e2d8', borderRadius: 10, padding: 18 }}>
-                  <h3 style={{ fontSize: 15, margin: '0 0 8px', color: '#e86631' }}>{law.title}</h3>
-                  <div style={{ background: '#1e293b', padding: '10px 12px', borderRadius: 6, fontFamily: 'monospace', fontSize: 13, color: '#38bdf8', marginBottom: 10 }}>
-                    {law.eq}
-                  </div>
-                  <p style={{ margin: '0 0 10px', fontSize: 12, color: '#5f5b54', lineHeight: 1.5 }}>
-                    {law.desc}
-                  </p>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: 4 }}>
-                    ✓ {law.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── TAB 6: PRECISE LST LOOKUP ── */}
       {activeTab === 'lookup' && (

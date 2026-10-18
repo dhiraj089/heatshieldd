@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, AlertTriangle, ArrowRight, BarChart3, Bell, Boxes, Building, Calendar, Check, CheckCircle2, ChevronDown, Clock, CloudRain, Code2, Compass, Cpu, Crosshair, Database, DollarSign, Download, Droplets, Eye, Filter, Flame, Gauge, Info, Layers, Layers3, MapPin, Menu, Navigation, Network, Pause, Play, Radio, RefreshCw, RotateCw, Search, Server, Settings2, Share2, ShieldAlert, ShieldCheck, Sliders, Sparkles, Sun, Terminal, Thermometer, TreePine, TrendingDown, Waves, Wind, Workflow, X, Zap } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Activity, AlertTriangle, ArrowRight, BarChart3, Bell, Boxes, Building, Calendar, Check, CheckCircle2, ChevronDown, Clock, CloudRain, Code2, Compass, Cpu, Crosshair, Database, DollarSign, Download, Droplets, Eye, Filter, Flame, Gauge, Info, Layers, Layers3, MapPin, Maximize2, Menu, Navigation, Network, Pause, Play, Radio, RefreshCw, RotateCw, Search, Server, Settings2, Share2, ShieldAlert, ShieldCheck, Sliders, Sparkles, Sun, Terminal, Thermometer, TreePine, TrendingDown, Waves, Wind, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
 import HistoricalPage from '@/components/HistoricalPage'
+import RiskStratificationPage from '@/components/RiskStratificationPage'
+import AnalyticsPage from '@/components/analytics/AnalyticsPage'
 import {
   PINN_BENCHMARK,
   THANE_DATASET_RECORDS,
@@ -18,13 +20,14 @@ import {
   type ThaneDatasetRecord,
   type ZoneMetricSummary,
 } from '@/lib/thane-dataset'
+import { generateVerdict, type CityReference, type VerdictResult } from '@/lib/heat-verdict'
 
 type NavItem = { label: string; icon: React.ElementType }
 const nav: NavItem[] = [
   { label: 'Analytics', icon: BarChart3 },
-  { label: '48h Forecast', icon: CloudRain },
   { label: 'Historical', icon: Activity },
   { label: 'Heat Map', icon: Layers3 },
+  { label: 'Risk Stratification', icon: ShieldAlert },
   { label: 'Intervention Plan', icon: Settings2 },
   { label: 'Model', icon: Gauge },
   { label: 'Architecture', icon: Sparkles },
@@ -395,6 +398,8 @@ function useIndiaTime() {
 
 export interface LiveWeatherData {
   location: ThaneLocation
+  dataSource: 'open-meteo' | 'fallback'
+  dataError: string | null
   temp: number
   feelsLike: number
   humidity: number
@@ -462,6 +467,8 @@ const defaultWeatherForLocation = (location: ThaneLocation): LiveWeatherData => 
 
   return {
     location,
+    dataSource: 'fallback',
+    dataError: null,
     temp,
     feelsLike,
     humidity,
@@ -500,11 +507,15 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
   const [data, setData] = useState<LiveWeatherData>(() => defaultWeatherForLocation(selectedLocation))
   const [flowStep, setFlowStep] = useState<'routing' | 'geo-lock' | 'satellite' | 'calibrated' | 'synced'>('synced')
   const [latencyMs, setLatencyMs] = useState(24)
+  const latestRequestId = useRef(0)
 
   const fetchWeather = async (targetLoc: ThaneLocation) => {
+    const requestId = ++latestRequestId.current
+    const isLatestRequest = () => requestId === latestRequestId.current
     const startTime = performance.now()
     setData(prev => ({
       ...defaultWeatherForLocation(targetLoc),
+      dataError: null,
       isLoading: true,
       updatedAt: 'Syncing telemetry...',
       flowStep: 'routing',
@@ -512,18 +523,22 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
     }))
     setFlowStep('routing')
 
-    setTimeout(() => setFlowStep('geo-lock'), 100)
-    setTimeout(() => setFlowStep('satellite'), 220)
-    setTimeout(() => setFlowStep('calibrated'), 380)
+    setTimeout(() => { if (isLatestRequest()) setFlowStep('geo-lock') }, 100)
+    setTimeout(() => { if (isLatestRequest()) setFlowStep('satellite') }, 220)
+    setTimeout(() => { if (isLatestRequest()) setFlowStep('calibrated') }, 380)
 
     try {
       const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${targetLoc.lat}&longitude=${targetLoc.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,surface_temperature,uv_index&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m&timezone=Asia%2FKolkata`
-      const weatherPromise = fetch(weatherUrl).then(r => r.json())
+      const weatherPromise = fetch(weatherUrl).then(response => {
+        if (!response.ok) throw new Error(`Weather service returned HTTP ${response.status}.`)
+        return response.json()
+      })
 
       const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${targetLoc.lat}&longitude=${targetLoc.lon}&current=pm2_5,pm10,us_aqi&hourly=us_aqi&timezone=Asia%2FKolkata`
       const aqiPromise = fetch(aqiUrl).then(r => r.json()).catch(() => null)
 
       const [wJson, aqiJson] = await Promise.all([weatherPromise, aqiPromise])
+      if (!isLatestRequest()) return
       const latency = Math.max(16, Math.min(85, Math.round(performance.now() - startTime)))
       setLatencyMs(latency)
 
@@ -533,9 +548,14 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
         const hourlyTemps: number[] = (hourly.temperature_2m || []).slice(0, 24)
         const hourlyPrecip: number[] = (hourly.precipitation || []).slice(0, 12)
 
-        const rawTemp = Number(cur.temperature_2m?.toFixed(1)) || 31.0
-        const temp = Number((rawTemp + (targetLoc.lstOffset * 0.3)).toFixed(1))
-        const feelsLike = Number(cur.apparent_temperature?.toFixed(1)) || Number((temp + 3.0).toFixed(1))
+        const rawTemp = Number(cur.temperature_2m)
+        if (!Number.isFinite(rawTemp)) {
+          throw new Error('Open-Meteo response did not include a valid current temperature.')
+        }
+        const temp = Number(rawTemp.toFixed(1))
+        const feelsLike = Number.isFinite(cur.apparent_temperature)
+          ? Number(cur.apparent_temperature.toFixed(1))
+          : Number((temp + 3.0).toFixed(1))
         const humidity = Number(cur.relative_humidity_2m) || 72
         const windSpeed = Number(cur.wind_speed_10m?.toFixed(1)) || 11.5
         const windDirection = getWindCompass(cur.wind_direction_10m ?? 240)
@@ -546,13 +566,13 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
         const baseSurface = cur.surface_temperature
           ? Number(cur.surface_temperature.toFixed(1))
           : Number((rawTemp * 1.22).toFixed(1))
-        
+
         const surfaceTemp = Number((baseSurface + targetLoc.lstOffset).toFixed(1))
 
         const validTemps = hourlyTemps.length > 0
-          ? hourlyTemps.map(t => Number((t + (targetLoc.lstOffset * 0.3)).toFixed(1)))
+          ? hourlyTemps.map(t => Number(t.toFixed(1)))
           : defaultWeatherForLocation(targetLoc).chartTemp
-        
+
         const peakTemp = Math.max(...validTemps)
         const peakIndex = validTemps.indexOf(peakTemp)
         const peakTime = peakIndex >= 0
@@ -603,10 +623,13 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
           second: '2-digit',
           hour12: true,
         })
+        const modelTime = typeof cur.time === 'string' ? new Date(cur.time) : now
 
         setFlowStep('synced')
         setData({
           location: targetLoc,
+          dataSource: 'open-meteo',
+          dataError: null,
           temp,
           feelsLike,
           humidity,
@@ -626,28 +649,25 @@ function useLiveWeather(currentHour: number, selectedLocation: ThaneLocation) {
           heatHealthIndex: hhi,
           hotspotsCount: hotspots,
           zonesList,
-          updatedAt: timeFormatter.format(now),
+          updatedAt: timeFormatter.format(Number.isNaN(modelTime.getTime()) ? now : modelTime),
           isLoading: false,
           flowStep: 'synced',
           latencyMs: latency,
         })
       } else {
-        setFlowStep('synced')
-        setData({
-          ...defaultWeatherForLocation(targetLoc),
-          isLoading: false,
-          flowStep: 'synced',
-          latencyMs: latency,
-        })
+        throw new Error('Weather service response did not include current conditions.')
       }
-    } catch {
+    } catch (error) {
+      if (!isLatestRequest()) return
       setFlowStep('synced')
-      setData(prev => ({
+      setData({
         ...defaultWeatherForLocation(targetLoc),
+        dataError: error instanceof Error ? error.message : 'Unable to retrieve live weather data.',
+        updatedAt: 'Demo estimate · live feed unavailable',
         isLoading: false,
         flowStep: 'synced',
         latencyMs: 32,
-      }))
+      })
     }
   }
 
@@ -760,7 +780,7 @@ function Sidebar({
         <div className="brand-mark"><span /></div>
         <div><strong>HEAT<span>SHIELD</span></strong><small>THANE CITY</small></div>
       </div>
-      
+
       <div className="workspace-container">
         <button
           className="workspace"
@@ -824,13 +844,15 @@ function Sidebar({
 }
 
 function WeatherStrip({ weather, location }: { weather: LiveWeatherData; location: ThaneLocation }) {
+  const liveSource = weather.dataSource === 'open-meteo' && !weather.isLoading
   return (
     <div className="weather-strip">
-      <div className="weather-now">
-        <span className="live-dot" /> <strong>{location.name}</strong> · LIVE
+      <div className={`weather-now ${liveSource ? '' : 'fallback'}`}>
+        <span className={liveSource ? 'live-dot' : 'fallback-dot'} />
+        <strong>{location.name}</strong> · {liveSource ? 'OPEN-METEO MODEL' : weather.isLoading ? 'SYNCING · DEMO SHOWN' : 'DEMO ESTIMATE'}
       </div>
       <div>
-        <Thermometer size={16} /> <strong>{weather.temp}°C</strong> <small>feels {weather.feelsLike}°C</small>
+        <Thermometer size={16} /> <strong>{weather.temp}°C</strong> <small>{liveSource ? `model feels ${weather.feelsLike}°C` : 'illustrative only'}</small>
       </div>
       <div>
         <Droplets size={16} /> <strong>{weather.humidity}%</strong> <small>humidity</small>
@@ -844,11 +866,12 @@ function WeatherStrip({ weather, location }: { weather: LiveWeatherData; locatio
         <small>{weather.uvCategory}</small>
       </div>
       <div>
-        <span className="surface-icon">◒</span> <strong>{weather.surfaceTemp}°C</strong> <small>LST</small>
+        <span className="surface-icon">◒</span> <strong>{weather.surfaceTemp}°C</strong> <small>{liveSource ? 'LST estimate' : 'demo LST'}</small>
       </div>
       <div className="updated" suppressHydrationWarning>
-        {location.zoneNumber} · {weather.updatedAt} <span className="offline">● Live Feed</span>
+        {location.zoneNumber} · {weather.updatedAt} <span className={liveSource ? 'offline' : 'weather-source-fallback'}>{liveSource ? '● Model feed' : '● Not live'}</span>
       </div>
+      {!liveSource && weather.dataError && <div className="weather-strip-error" role="status">{weather.dataError}</div>}
     </div>
   )
 }
@@ -871,14 +894,18 @@ function AlertBanner({
       <div className="alert-icon"><AlertTriangle size={20} /></div>
       <div>
         <strong>
-          {isHighRisk
-            ? `Active Thermal Alert · ${location.name} (${location.zoneNumber})`
-            : `Live Heat Advisory · ${location.name} (${location.zoneNumber})`}
+          {weather.dataSource === 'fallback'
+            ? `Demo Thermal Estimate · ${location.name} (${location.zoneNumber})`
+            : isHighRisk
+              ? `Active Thermal Alert · ${location.name} (${location.zoneNumber})`
+              : `Live Heat Advisory · ${location.name} (${location.zoneNumber})`}
         </strong>
         <span>
-          {isHighRisk
-            ? `Land Surface Temperature elevated at ${weather.surfaceTemp}°C (Ambient ${weather.temp}°C). ${location.description}`
-            : `Current temperature ${weather.temp}°C, humidity ${weather.humidity}%. Environmental parameters within standard tolerance.`}
+          {weather.dataSource === 'fallback'
+            ? `Live weather is unavailable. The displayed ${weather.surfaceTemp}°C surface temperature and risk status are illustrative estimates, not current measurements.${weather.dataError ? ` ${weather.dataError}` : ''}`
+            : isHighRisk
+              ? `Land Surface Temperature elevated at ${weather.surfaceTemp}°C (Ambient ${weather.temp}°C). ${location.description}`
+              : `Current temperature ${weather.temp}°C, humidity ${weather.humidity}%. Environmental parameters within standard tolerance.`}
         </span>
       </div>
       <small suppressHydrationWarning>Telemetry Sync · {timeShort} IST</small>
@@ -916,7 +943,7 @@ function LocationBar({
         loc.type.toLowerCase().includes(q) ||
         loc.zoneNumber.toLowerCase().includes(q) ||
         loc.keyLandmark.toLowerCase().includes(q)
-      
+
       const matchesFilter = filterType === 'all' || loc.vulnerability.toLowerCase() === filterType.toLowerCase()
       return matchesSearch && matchesFilter
     })
@@ -1179,8 +1206,8 @@ function Analytics({
   const safeHoursLabel = time.hour >= 11 && time.hour < 16
     ? 'After 5:00 PM'
     : time.hour < 10
-    ? 'Until 10:30 AM'
-    : 'Safe outdoor period'
+      ? 'Until 10:30 AM'
+      : 'Safe outdoor period'
 
   const safeHoursSubtitle = time.hour >= 11 && time.hour < 16
     ? `Peak heat load in ${selectedLocation.name} · Stay hydrated`
@@ -1527,6 +1554,160 @@ interface HeatMapLocationMeta {
   riskLevel?: string
 }
 
+const LOCATION_LABEL_CONFIG: Record<string, {
+  displayName: string
+  labelAnchor: 'start' | 'middle' | 'end'
+  labelDx: number
+  labelDy: number
+  badgeDx: number
+  badgeDy: number
+}> = {
+  'owale-gaimukh': {
+    displayName: 'Owale · Gaimukh Waterfront',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'ghodbunder': {
+    displayName: 'Ghodbunder · Kasarvadavali',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'hiranandani': {
+    displayName: 'Hiranandani Estate · Patlipada',
+    labelAnchor: 'start',
+    labelDx: 18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'manpada': {
+    displayName: 'Manpada',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'kolshet': {
+    displayName: 'Kolshet Road',
+    labelAnchor: 'start',
+    labelDx: 18,
+    labelDy: -4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'balkum': {
+    displayName: 'Balkum · Saket',
+    labelAnchor: 'start',
+    labelDx: 18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'vasant-vihar': {
+    displayName: 'Vasant Vihar',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'vartak-nagar': {
+    displayName: 'Vartak Nagar · Pokhran',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'majiwada': {
+    displayName: 'Majiwada',
+    labelAnchor: 'start',
+    labelDx: 18,
+    labelDy: 14,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'kalwa': {
+    displayName: 'Kalwa',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'wagle': {
+    displayName: 'Wagle Industrial Estate',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: 4,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'naupada': {
+    displayName: 'Naupada · Panchpakhadi',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: -12,
+    badgeDx: 0,
+    badgeDy: -22,
+  },
+  'thane-station': {
+    displayName: 'Station Area & Talao Pali',
+    labelAnchor: 'start',
+    labelDx: 18,
+    labelDy: -10,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'louiswadi': {
+    displayName: 'Louiswadi · Teen Hath Naka',
+    labelAnchor: 'end',
+    labelDx: -18,
+    labelDy: 14,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'kopri': {
+    displayName: 'Kopri',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 25,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'mumbra': {
+    displayName: 'Mumbra',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'diva': {
+    displayName: 'Diva',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+  'shilphata': {
+    displayName: 'Shilphata Junction',
+    labelAnchor: 'middle',
+    labelDx: 0,
+    labelDy: 24,
+    badgeDx: 0,
+    badgeDy: -20,
+  },
+}
+
 function HeatMapPage({
   selectedLocation,
   onSelectLocation,
@@ -1541,13 +1722,15 @@ function HeatMapPage({
   const [heatmapMode, setHeatmapMode] = useState<'dataset' | 'live' | 'historical'>('dataset')
   const [hmYear, setHmYear] = useState<number>(2024)
   const [hmMonth, setHmMonth] = useState<number>(5)
-  const [severityFilter, setSeverityFilter] = useState<'all' | 'High' | 'Moderate' | 'Low'>('all')
-  const [searchQuery, setSearchQuery] = useState('')
   const [hoveredLocId, setHoveredLocId] = useState<string | null>(null)
+  const [focusedMapLocationId, setFocusedMapLocationId] = useState<string | null>(null)
+  const heatMapPanelRef = useRef<HTMLDivElement>(null)
   const [showThermalMesh, setShowThermalMesh] = useState(true)
   const [showContours, setShowContours] = useState(true)
   const [showBuffers, setShowBuffers] = useState(true)
   const [showLabels, setShowLabels] = useState(true)
+  const [mapLayout, setMapLayout] = useState<'expansive' | 'split'>('expansive')
+  const [zoomLevel, setZoomLevel] = useState<number>(1)
 
   // Bounding envelope for Thane 18 locations
   // Lat: 19.1458 (Shilphata) to 19.2941 (Gaimukh)
@@ -1557,9 +1740,9 @@ function HeatMapPage({
   const minLon = 72.932
   const maxLon = 73.058
 
-  const mapWidth = 920
-  const mapHeight = 580
-  const padX = 65
+  const mapWidth = 1120
+  const mapHeight = 640
+  const padX = 70
   const padY = 55
   const innerW = mapWidth - padX * 2
   const innerH = mapHeight - padY * 2
@@ -1580,8 +1763,11 @@ function HeatMapPage({
       let coolingPriority: 'Emergency' | 'High' | 'Routine' | 'Protected' = 'Routine'
       let recommendedAction = ''
       let pinnPredictedLST: number | undefined = undefined
-      let ndvi: number | undefined = undefined
-      let ndbi: number | undefined = undefined
+      const zoneSummary = THANE_ZONES_METRIC_SUMMARY.find(
+        zone => zone.areaId === LOCATION_ID_MAP[loc.id]
+      )
+      let ndvi: number | undefined = zoneSummary?.avgNDVI
+      let ndbi: number | undefined = zoneSummary?.avgNDBI
       let albedo: number | undefined = undefined
       let riskLevel: string | undefined = undefined
 
@@ -1597,8 +1783,8 @@ function HeatMapPage({
           recommendedAction = severity === 'High'
             ? 'Deploy mobile misting fans & activate cool roofs immediately.'
             : severity === 'Moderate'
-            ? 'Increase shaded bus shelters & distribute hydration advisories.'
-            : 'Maintain existing tree canopy & protect natural creek buffer.'
+              ? 'Increase shaded bus shelters & distribute hydration advisories.'
+              : 'Maintain existing tree canopy & protect natural creek buffer.'
           hotspotIntensity = Math.min(100, Math.max(15, Math.round((lst - 28) * 6.5)))
           pinnPredictedLST = exactRecord.pinnPredictedLST
           ndvi = exactRecord.ndvi
@@ -1677,35 +1863,43 @@ function HeatMapPage({
     })
   }, [heatmapMode, weather.temp, hmYear, hmMonth])
 
-  // Counts for severity breakdown
-  const highCount = computedLocations.filter(c => c.severity === 'High').length
-  const moderateCount = computedLocations.filter(c => c.severity === 'Moderate').length
-  const lowCount = computedLocations.filter(c => c.severity === 'Low').length
-  const totalCount = computedLocations.length
-
-  const highPct = Math.round((highCount / totalCount) * 100)
-  const modPct = Math.round((moderateCount / totalCount) * 100)
-  const lowPct = 100 - highPct - modPct
-
-  const avgHighLST = Number((computedLocations.filter(c => c.severity === 'High').reduce((a, b) => a + b.lst, 0) / (highCount || 1)).toFixed(1))
-  const avgModLST = Number((computedLocations.filter(c => c.severity === 'Moderate').reduce((a, b) => a + b.lst, 0) / (moderateCount || 1)).toFixed(1))
-  const avgLowLST = Number((computedLocations.filter(c => c.severity === 'Low').reduce((a, b) => a + b.lst, 0) / (lowCount || 1)).toFixed(1))
-
-  // Filtered locations for table & highlights
-  const displayedLocations = useMemo(() => {
-    return computedLocations.filter(c => {
-      const matchSeverity = severityFilter === 'all' || c.severity === severityFilter
-      const matchQuery =
-        searchQuery.trim() === '' ||
-        c.loc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.loc.ward.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.loc.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.loc.keyLandmark.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchSeverity && matchQuery
-    })
-  }, [computedLocations, severityFilter, searchQuery])
-
   const activeSelectedMeta = computedLocations.find(c => c.loc.id === selectedLocation.id) || computedLocations[0]
+  const focusedMapLocation = computedLocations.find(location => location.loc.id === focusedMapLocationId)
+
+  const mapViewBox = useMemo(() => {
+    if (focusedMapLocation && zoomLevel === 1) {
+      const boxW = 700
+      const boxH = 400
+      const curX = Math.max(0, Math.min(mapWidth - boxW, focusedMapLocation.x - boxW / 2))
+      const curY = Math.max(0, Math.min(mapHeight - boxH, focusedMapLocation.y - boxH / 2))
+      return `${curX} ${curY} ${boxW} ${boxH}`
+    }
+    if (zoomLevel > 1) {
+      const targetX = focusedMapLocation ? focusedMapLocation.x : mapWidth / 2
+      const targetY = focusedMapLocation ? focusedMapLocation.y : mapHeight / 2
+      const boxW = mapWidth / zoomLevel
+      const boxH = mapHeight / zoomLevel
+      const curX = Math.max(0, Math.min(mapWidth - boxW, targetX - boxW / 2))
+      const curY = Math.max(0, Math.min(mapHeight - boxH, targetY - boxH / 2))
+      return `${curX} ${curY} ${boxW} ${boxH}`
+    }
+    return `0 0 ${mapWidth} ${mapHeight}`
+  }, [focusedMapLocation, zoomLevel, mapWidth, mapHeight])
+
+  const hasCurrentReading =
+    weather.dataSource === 'open-meteo' &&
+    weather.location.id === selectedLocation.id &&
+    !weather.isLoading
+
+  const selectMapLocation = (location: ThaneLocation, scrollToMap = false) => {
+    onSelectLocation(location)
+    setFocusedMapLocationId(location.id)
+    if (scrollToMap) {
+      requestAnimationFrame(() => {
+        heatMapPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
+  }
 
   return (
     <div className="heatmap-page">
@@ -1760,6 +1954,32 @@ function HeatMapPage({
         borderRadius: 12, padding: '14px 20px', flexWrap: 'wrap'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MapPin size={16} style={{ color: '#e86631' }} />
+          <label htmlFor="heatmap-location-select" style={{ fontSize: 13, fontWeight: 700, color: '#5f5b54', letterSpacing: '0.05em' }}>
+            SELECT LOCATION:
+          </label>
+          <select
+            id="heatmap-location-select"
+            aria-label="Select heat map location"
+            value={selectedLocation.id}
+            onChange={e => {
+              const location = THANE_LOCATIONS.find(loc => loc.id === e.target.value)
+              if (location) selectMapLocation(location)
+            }}
+            style={{
+              background: '#fffdf8', color: '#2a2824',
+              border: '1px solid #dfd9cc',
+              padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', outline: 'none', maxWidth: 260
+            }}
+          >
+            {THANE_LOCATIONS.map(loc => (
+              <option key={loc.id} value={loc.id}>{loc.zoneNumber} · {loc.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Calendar size={16} style={{ color: '#e86631' }} />
           <span style={{ fontSize: 13, fontWeight: 700, color: '#5f5b54', letterSpacing: '0.05em' }}>SELECT YEAR:</span>
           <select
@@ -1810,10 +2030,13 @@ function HeatMapPage({
             background: 'rgba(232,102,49,0.12)', border: '1px solid rgba(232,102,49,0.3)',
             borderRadius: 8, padding: '6px 14px', fontSize: 12, color: '#e86631', fontWeight: 600
           }}>
-            📍 Active Zone: <strong>{activeSelectedMeta.loc.zoneNumber} ({activeSelectedMeta.loc.name})</strong> · Exact LST: <strong style={{ fontSize: 14 }}>{activeSelectedMeta.lst}°C</strong>
+            📍 Active Zone: <strong>{activeSelectedMeta.loc.zoneNumber} ({activeSelectedMeta.loc.name})</strong> · {heatmapMode === 'dataset' ? 'Observed LST' : 'Mode LST'}: <strong style={{ fontSize: 14 }}>{activeSelectedMeta.lst}°C</strong>
             {activeSelectedMeta.pinnPredictedLST != null && (
               <span style={{ marginLeft: 8, color: '#4ade80' }}>· PINN: {activeSelectedMeta.pinnPredictedLST.toFixed(1)}°C</span>
             )}
+            <span style={{ marginLeft: 8, color: '#176b55' }}>
+              · Current air: <strong>{hasCurrentReading ? `${weather.temp.toFixed(1)}°C` : weather.isLoading ? 'syncing…' : 'unavailable'}</strong>
+            </span>
           </div>
           <span style={{ fontSize: 12, color: '#9b968d' }}>
             Period: <strong>{MONTH_NAMES[hmMonth - 1]} {hmYear}</strong> ({computedLocations.length} Wards)
@@ -1831,8 +2054,8 @@ function HeatMapPage({
             {heatmapMode === 'dataset'
               ? `Displaying exact Land Surface Temperature (LST) observations from the 2,304-record PINN dataset for ${MONTH_NAMES[hmMonth - 1]} ${hmYear} across all 18 Thane municipal wards.`
               : heatmapMode === 'live'
-              ? `Displaying current real-time LST calibrated with Open-Meteo satellite feed at ${time.timeShort} IST. Offsets applied for all 18 Thane locations.`
-              : 'Displaying 90-day peak summer Land Surface Temperature (LST) and multi-year heatwave frequency baseline across all 18 Thane locations.'}
+                ? `Displaying current real-time LST calibrated with Open-Meteo satellite feed at ${time.timeShort} IST. Offsets applied for all 18 Thane locations.`
+                : 'Displaying 90-day peak summer Land Surface Temperature (LST) and multi-year heatwave frequency baseline across all 18 Thane locations.'}
           </p>
         </div>
         <div className="hm-banner-toggles">
@@ -1876,13 +2099,67 @@ function HeatMapPage({
       </div>
 
       {/* Main Heatmap Grid (Map Canvas + Selected Inspector) */}
-      <div className="hm-canvas-grid">
+      <div className={`hm-canvas-grid ${mapLayout === 'split' ? 'split-mode' : 'expansive-mode'}`}>
         {/* SVG Interactive Heat Map */}
-        <div className="panel hm-map-panel">
+        <div className="panel hm-map-panel" ref={heatMapPanelRef}>
           <div className="hm-map-head">
             <div className="hm-map-title">
               <h2>Spatial Land Surface Temperature (LST) Map · Thane Municipal Region</h2>
-              <p>18 Monitored Geographic Locations · Hover to inspect · Click to lock telemetry</p>
+              <p>Focused location: {activeSelectedMeta.loc.name} ({activeSelectedMeta.loc.zoneNumber}) · Current air: {hasCurrentReading ? `${weather.temp.toFixed(1)}°C` : weather.isLoading ? 'syncing' : 'unavailable'} · Click a zone to focus its map point</p>
+            </div>
+            <div className="hm-map-controls">
+              <button
+                type="button"
+                className="hm-ctrl-btn"
+                onClick={() => setZoomLevel(z => Math.min(2.5, Number((z + 0.3).toFixed(1))))}
+                title="Zoom In"
+                disabled={zoomLevel >= 2.5}
+              >
+                <ZoomIn size={12} />
+                <span>Zoom In</span>
+              </button>
+              <button
+                type="button"
+                className="hm-ctrl-btn"
+                onClick={() => setZoomLevel(z => Math.max(1, Number((z - 0.3).toFixed(1))))}
+                title="Zoom Out"
+                disabled={zoomLevel <= 1}
+              >
+                <ZoomOut size={12} />
+                <span>Zoom Out</span>
+              </button>
+              {(zoomLevel > 1 || focusedMapLocationId != null) && (
+                <button
+                  type="button"
+                  className="hm-ctrl-btn"
+                  onClick={() => {
+                    setZoomLevel(1)
+                    setFocusedMapLocationId(null)
+                  }}
+                  title="Reset View"
+                >
+                  <RotateCw size={12} />
+                  <span>Reset View</span>
+                </button>
+              )}
+              <button
+                type="button"
+                className={`hm-ctrl-btn ${mapLayout === 'expansive' ? 'active' : ''}`}
+                onClick={() => setMapLayout(l => l === 'expansive' ? 'split' : 'expansive')}
+                title="Toggle Expansive Full Map / Side-by-Side View"
+              >
+                <Maximize2 size={12} />
+                <span>{mapLayout === 'expansive' ? 'Full Map View' : 'Split View'}</span>
+              </button>
+              {focusedMapLocationId != null && (
+                <button
+                  type="button"
+                  className="hm-ctrl-btn"
+                  onClick={() => setFocusedMapLocationId(null)}
+                >
+                  Show all zones
+                </button>
+              )}
             </div>
             <div className="hm-map-legend">
               <div className="legend-item">
@@ -1902,7 +2179,7 @@ function HeatMapPage({
 
           <div className="hm-svg-container">
             <svg
-              viewBox={`0 0 ${mapWidth} ${mapHeight}`}
+              viewBox={mapViewBox}
               className="hm-svg-canvas"
               aria-label="Thane City Thermal Heatmap"
             >
@@ -1940,14 +2217,16 @@ function HeatMapPage({
 
               {/* Background Grid Lines */}
               <g className="hm-grid-mesh" stroke="#e8e2d6" strokeWidth="1" strokeDasharray="3 3">
-                <line x1="60" y1="120" x2="860" y2="120" />
-                <line x1="60" y1="240" x2="860" y2="240" />
-                <line x1="60" y1="360" x2="860" y2="360" />
-                <line x1="60" y1="480" x2="860" y2="480" />
-                <line x1="180" y1="40" x2="180" y2="540" />
-                <line x1="360" y1="40" x2="360" y2="540" />
-                <line x1="540" y1="40" x2="540" y2="540" />
-                <line x1="720" y1="40" x2="720" y2="540" />
+                <line x1="60" y1="110" x2="1060" y2="110" />
+                <line x1="60" y1="220" x2="1060" y2="220" />
+                <line x1="60" y1="330" x2="1060" y2="330" />
+                <line x1="60" y1="440" x2="1060" y2="440" />
+                <line x1="60" y1="550" x2="1060" y2="550" />
+                <line x1="180" y1="40" x2="180" y2="600" />
+                <line x1="360" y1="40" x2="360" y2="600" />
+                <line x1="540" y1="40" x2="540" y2="600" />
+                <line x1="720" y1="40" x2="720" y2="600" />
+                <line x1="900" y1="40" x2="900" y2="600" />
               </g>
 
               {/* Natural Buffers & Geography */}
@@ -1955,39 +2234,39 @@ function HeatMapPage({
                 <g className="hm-geo-features">
                   {/* Sanjay Gandhi National Park / Western Green Buffer */}
                   <path
-                    d="M 55,50 C 90,120 120,240 110,380 C 100,450 70,510 55,540 Z"
+                    d="M 60,40 C 110,120 150,260 140,420 C 130,500 90,560 65,600 Z"
                     fill="url(#forestGrad)"
                     stroke="#16a34a"
                     strokeWidth="1.2"
                     strokeDasharray="4 2"
                     opacity="0.8"
                   />
-                  <text x="75" y="180" fill="#15803d" fontSize="9" fontWeight="700" letterSpacing="1" transform="rotate(-75 75 180)">
+                  <text x="90" y="220" fill="#15803d" fontSize="9.5" fontWeight="700" letterSpacing="1" transform="rotate(-75 90 220)">
                     SGNP FOREST BUFFER (CANOPY COOLING)
                   </text>
 
                   {/* Vasai & Thane Creek Waterway Corridor */}
                   <path
-                    d="M 120,50 C 260,80 440,110 580,180 C 690,240 760,330 840,490 L 870,540 L 810,540 C 720,380 640,290 520,210 C 380,130 220,95 100,55 Z"
+                    d="M 150,45 C 320,75 550,115 720,190 C 850,260 940,360 1040,540 L 1075,600 L 1005,600 C 895,420 800,320 655,225 C 480,135 280,95 125,50 Z"
                     fill="url(#creekGrad)"
                     stroke="#2563eb"
                     strokeWidth="1.2"
                     opacity="0.85"
                   />
-                  <text x="640" y="270" fill="#1d4ed8" fontSize="9" fontWeight="700" letterSpacing="1" transform="rotate(45 640 270)">
+                  <text x="780" y="280" fill="#1d4ed8" fontSize="9.5" fontWeight="700" letterSpacing="1.2" transform="rotate(42 780 280)">
                     THANE CREEK & WATERFRONT CORRIDOR
                   </text>
 
                   {/* Parsik Hills Thermal Barrier */}
                   <path
-                    d="M 680,310 Q 720,390 700,510"
+                    d="M 830,340 Q 880,440 855,570"
                     fill="none"
                     stroke="#b45309"
                     strokeWidth="2.5"
                     strokeDasharray="6 3"
                     opacity="0.55"
                   />
-                  <text x="730" y="440" fill="#92400e" fontSize="8" fontWeight="600" letterSpacing="0.8">
+                  <text x="890" y="480" fill="#92400e" fontSize="8.5" fontWeight="600" letterSpacing="0.8">
                     PARSIK HILLS RIDGE
                   </text>
                 </g>
@@ -1997,7 +2276,7 @@ function HeatMapPage({
               {showThermalMesh && (
                 <g className="hm-heat-blooms">
                   {computedLocations.map(meta => {
-                    const radius = meta.severity === 'High' ? 115 : meta.severity === 'Moderate' ? 90 : 70
+                    const radius = meta.severity === 'High' ? 130 : meta.severity === 'Moderate' ? 100 : 78
                     return (
                       <circle
                         key={`bloom-${meta.loc.id}`}
@@ -2024,7 +2303,7 @@ function HeatMapPage({
                         <circle
                           cx={meta.x}
                           cy={meta.y}
-                          r={isHigh ? 42 : 32}
+                          r={isHigh ? 46 : 36}
                           fill="none"
                           stroke={strokeColor}
                           strokeWidth="1"
@@ -2033,7 +2312,7 @@ function HeatMapPage({
                         <circle
                           cx={meta.x}
                           cy={meta.y}
-                          r={isHigh ? 72 : 54}
+                          r={isHigh ? 80 : 60}
                           fill="none"
                           stroke={strokeColor}
                           strokeWidth="0.75"
@@ -2056,11 +2335,33 @@ function HeatMapPage({
                   const statusBg = isHigh ? '#fee2e2' : isMod ? '#fef3c7' : '#dcfce7'
                   const statusText = isHigh ? '#b91c1c' : isMod ? '#b45309' : '#15803d'
 
+                  const cfg = LOCATION_LABEL_CONFIG[meta.loc.id] || {
+                    displayName: meta.loc.name,
+                    labelAnchor: 'middle' as const,
+                    labelDx: 0,
+                    labelDy: 23,
+                    badgeDx: 0,
+                    badgeDy: -20,
+                  }
+
+                  const nameText = cfg.displayName
+                  const textLength = nameText.length
+                  const boxWidth = textLength * 6.3 + 14
+
+                  let rectX = -boxWidth / 2
+                  if (cfg.labelAnchor === 'start') {
+                    rectX = -4
+                  } else if (cfg.labelAnchor === 'end') {
+                    rectX = -boxWidth + 4
+                  }
+
+                  const hasOffsetConnector = (cfg.labelDx !== 0 && (cfg.labelAnchor === 'start' || cfg.labelAnchor === 'end'))
+
                   return (
                     <g
                       key={`node-${meta.loc.id}`}
                       className={`hm-node-group ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
-                      onClick={() => onSelectLocation(meta.loc)}
+                      onClick={() => selectMapLocation(meta.loc)}
                       onMouseEnter={() => setHoveredLocId(meta.loc.id)}
                       onMouseLeave={() => setHoveredLocId(null)}
                       style={{ cursor: 'pointer' }}
@@ -2070,7 +2371,7 @@ function HeatMapPage({
                         <circle
                           cx={meta.x}
                           cy={meta.y}
-                          r={isSelected ? 26 : 19}
+                          r={isSelected ? 28 : 20}
                           fill="none"
                           stroke={color}
                           strokeWidth={isSelected ? '2.5' : '1.5'}
@@ -2079,7 +2380,7 @@ function HeatMapPage({
                         />
                       )}
 
-                      {/* Outer Pin Halo */}
+                      {/* Pin Halo */}
                       <circle
                         cx={meta.x}
                         cy={meta.y}
@@ -2087,7 +2388,7 @@ function HeatMapPage({
                         fill="#ffffff"
                         stroke={color}
                         strokeWidth={isSelected ? 3.5 : 2.5}
-                        filter="drop-shadow(0 2px 4px rgba(0,0,0,0.18))"
+                        filter="drop-shadow(0 2px 5px rgba(0,0,0,0.2))"
                       />
 
                       {/* Center Dot */}
@@ -2099,24 +2400,24 @@ function HeatMapPage({
                       />
 
                       {/* Temperature Badge */}
-                      <g transform={`translate(${meta.x}, ${meta.y - 18})`}>
+                      <g transform={`translate(${meta.x + cfg.badgeDx}, ${meta.y + cfg.badgeDy})`}>
                         <rect
-                          x="-23"
+                          x="-24"
                           y="-10"
-                          width="46"
-                          height="16"
-                          rx="8"
+                          width="48"
+                          height="17"
+                          rx="8.5"
                           fill={isSelected ? '#252524' : statusBg}
-                          stroke={isSelected ? color : color}
-                          strokeWidth={isSelected ? '1.5' : '1'}
-                          filter="drop-shadow(0 1px 3px rgba(0,0,0,0.12))"
+                          stroke={color}
+                          strokeWidth={isSelected ? '2' : '1.2'}
+                          filter="drop-shadow(0 2px 4px rgba(0,0,0,0.15))"
                         />
                         <text
                           x="0"
-                          y="2"
+                          y="2.5"
                           textAnchor="middle"
                           fill={isSelected ? '#ffffff' : statusText}
-                          fontSize="9.5"
+                          fontSize="10"
                           fontWeight="700"
                         >
                           {meta.lst}°C
@@ -2125,27 +2426,41 @@ function HeatMapPage({
 
                       {/* Location Name & Ward Label */}
                       {showLabels && (
-                        <g transform={`translate(${meta.x}, ${meta.y + 19})`}>
+                        <g transform={`translate(${meta.x + cfg.labelDx}, ${meta.y + cfg.labelDy})`}>
+                          {/* Connector line if laterally offset */}
+                          {hasOffsetConnector && (
+                            <line
+                              x1={-cfg.labelDx}
+                              y1={-cfg.labelDy}
+                              x2={cfg.labelAnchor === 'start' ? -4 : 4}
+                              y2={0}
+                              stroke={isSelected ? color : '#bbb3a3'}
+                              strokeWidth={isSelected ? 1.5 : 1}
+                              strokeDasharray={isSelected ? undefined : '2 2'}
+                              opacity={0.8}
+                            />
+                          )}
                           <rect
-                            x={-(meta.loc.name.length * 3.4 + 6)}
-                            y="-2"
-                            width={meta.loc.name.length * 6.8 + 12}
-                            height="15"
-                            rx="4"
-                            fill="#ffffff"
-                            fillOpacity="0.9"
-                            stroke="#e5dfd5"
-                            strokeWidth="0.8"
+                            x={rectX}
+                            y="-9"
+                            width={boxWidth}
+                            height="18"
+                            rx="5"
+                            fill={isSelected ? '#2e2c28' : '#ffffff'}
+                            fillOpacity={isSelected ? 0.96 : 0.94}
+                            stroke={isSelected ? color : '#d5cfc4'}
+                            strokeWidth={isSelected ? '1.5' : '1'}
+                            filter="drop-shadow(0 1px 3px rgba(0,0,0,0.12))"
                           />
                           <text
-                            x="0"
-                            y="9"
-                            textAnchor="middle"
-                            fill="#2d2b27"
-                            fontSize="9"
-                            fontWeight={isSelected ? '800' : '600'}
+                            x={0}
+                            y="3"
+                            textAnchor={cfg.labelAnchor}
+                            fill={isSelected ? '#ffffff' : '#2d2b27'}
+                            fontSize="9.5"
+                            fontWeight={isSelected ? '800' : '650'}
                           >
-                            {meta.loc.name}
+                            {nameText}
                           </text>
                         </g>
                       )}
@@ -2155,9 +2470,9 @@ function HeatMapPage({
               </g>
 
               {/* Coordinates Scale Bar */}
-              <g transform="translate(65, 545)" fontSize="8.5" fill="#9c9588" fontWeight="600">
-                <text x="0" y="0">19.14°N / 72.94°E</text>
-                <text x="700" y="0" textAnchor="end">19.29°N / 73.05°E · Thane Metropolitan Boundary</text>
+              <g transform="translate(70, 615)" fontSize="9" fill="#9c9588" fontWeight="600">
+                <text x="0" y="0">19.14°N / 72.93°E</text>
+                <text x="980" y="0" textAnchor="end">19.31°N / 73.06°E · Thane Municipal Corporation Boundary</text>
               </g>
             </svg>
           </div>
@@ -2181,12 +2496,12 @@ function HeatMapPage({
             <div className={`hm-temp-display ${activeSelectedMeta.severity.toLowerCase()}`}>
               <div className="hm-temp-main">
                 <span className="hm-temp-val">{activeSelectedMeta.lst}°C</span>
-                <small>Land Surface Temp (LST)</small>
+                <small>{heatmapMode === 'dataset' ? 'Observed Land Surface Temp (LST)' : 'Modeled Land Surface Temp (LST)'}</small>
               </div>
               <div className="hm-temp-meta">
                 <div>
-                  <span>Ambient Temp</span>
-                  <strong>{activeSelectedMeta.ambientTemp}°C</strong>
+                  <span>Current Air Temp</span>
+                  <strong>{hasCurrentReading ? `${weather.temp.toFixed(1)}°C` : weather.isLoading ? 'Syncing' : 'Unavailable'}</strong>
                 </div>
                 <div>
                   <span>UHI Offset</span>
@@ -2195,6 +2510,18 @@ function HeatMapPage({
                   </strong>
                 </div>
               </div>
+            </div>
+
+            <div className={`hm-current-reading ${hasCurrentReading ? '' : 'is-fallback'}`}>
+              <strong>Current air temperature · Open-Meteo weather model</strong>
+              <span>
+                {hasCurrentReading
+                  ? `${weather.temp.toFixed(1)}°C at ${activeSelectedMeta.loc.lat.toFixed(4)}°N, ${activeSelectedMeta.loc.lon.toFixed(4)}°E`
+                  : weather.isLoading
+                    ? 'Fetching current conditions for this location…'
+                    : `Demo estimate only; no live current reading is available. ${weather.dataError ?? ''} The displayed LST remains the selected dataset or baseline value.`}
+              </span>
+              {hasCurrentReading && <small>Model time {weather.updatedAt} IST · coordinate-based estimate, not a local ground-station measurement</small>}
             </div>
 
             {/* PINN & Spectral Indices Card when available */}
@@ -2274,7 +2601,7 @@ function HeatMapPage({
                     key={l.id}
                     type="button"
                     className={`hm-mini-chip ${l.id === selectedLocation.id ? 'active' : ''}`}
-                    onClick={() => onSelectLocation(l)}
+                    onClick={() => selectMapLocation(l, true)}
                   >
                     {l.name}
                   </button>
@@ -2285,257 +2612,6 @@ function HeatMapPage({
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════
-          SEVERITY LEVEL BREAKDOWN SECTION (DOWN BELOW)
-          ═══════════════════════════════════════════════════════════════ */}
-      <div className="hm-severity-section">
-        <div className="hm-severity-header">
-          <div>
-            <p className="eyebrow" style={{ margin: 0 }}>MUNICIPAL RISK STRATIFICATION · {heatmapMode.toUpperCase()} MODE</p>
-            <h2>Thermal Severity Level Breakdown & Location Counts</h2>
-            <p className="subtext">
-              Real-time stratification of all 18 Thane municipal locations according to {heatmapMode === 'live' ? 'current live Land Surface Temperature (LST)' : 'historical multi-year summer baseline extremes'}.
-            </p>
-          </div>
-          <div className="hm-severity-mode-indicator">
-            Active Mode: <strong>{heatmapMode === 'live' ? 'Live Telemetry' : 'Historical Archive'}</strong> ({totalCount} Monitored Zones)
-          </div>
-        </div>
-
-        {/* 3 Interactive Severity Level Cards */}
-        <div className="hm-severity-card-grid">
-          {/* HIGH RISK / CRITICAL */}
-          <div
-            className={`hm-sev-card high ${severityFilter === 'High' ? 'selected' : ''}`}
-            onClick={() => setSeverityFilter(severityFilter === 'High' ? 'all' : 'High')}
-          >
-            <div className="hm-sev-card-top">
-              <span className="hm-sev-badge high">🔴 HIGH RISK / CRITICAL</span>
-              <strong className="hm-sev-count">{highCount} <small>Locations</small></strong>
-            </div>
-            <div className="hm-sev-bar-wrap">
-              <div className="hm-sev-bar high" style={{ width: `${highPct}%` }} />
-            </div>
-            <div className="hm-sev-meta">
-              <span>{highPct}% of Monitored City</span>
-              <span>Avg LST: <strong>{avgHighLST}°C</strong></span>
-            </div>
-            <p className="hm-sev-desc">
-              Zones with dense concrete mass, metal industrial roofs, and asphalt traffic bottlenecks. Elevated heat-related health risks.
-            </p>
-            <div className="hm-sev-footer">
-              <small>{severityFilter === 'High' ? '✓ Filter Applied (Click to clear)' : 'Click to filter table below'}</small>
-            </div>
-          </div>
-
-          {/* MODERATE / MEDIUM RISK */}
-          <div
-            className={`hm-sev-card mod ${severityFilter === 'Moderate' ? 'selected' : ''}`}
-            onClick={() => setSeverityFilter(severityFilter === 'Moderate' ? 'all' : 'Moderate')}
-          >
-            <div className="hm-sev-card-top">
-              <span className="hm-sev-badge mod">🟠 MODERATE / WATCH</span>
-              <strong className="hm-sev-count">{moderateCount} <small>Locations</small></strong>
-            </div>
-            <div className="hm-sev-bar-wrap">
-              <div className="hm-sev-bar mod" style={{ width: `${modPct}%` }} />
-            </div>
-            <div className="hm-sev-meta">
-              <span>{modPct}% of Monitored City</span>
-              <span>Avg LST: <strong>{avgModLST}°C</strong></span>
-            </div>
-            <p className="hm-sev-desc">
-              Transitional residential and highway corridors with moderate solar load. Requires preventive hydration and shade shelters.
-            </p>
-            <div className="hm-sev-footer">
-              <small>{severityFilter === 'Moderate' ? '✓ Filter Applied (Click to clear)' : 'Click to filter table below'}</small>
-            </div>
-          </div>
-
-          {/* LOW RISK / SAFE BUFFER */}
-          <div
-            className={`hm-sev-card low ${severityFilter === 'Low' ? 'selected' : ''}`}
-            onClick={() => setSeverityFilter(severityFilter === 'Low' ? 'all' : 'Low')}
-          >
-            <div className="hm-sev-card-top">
-              <span className="hm-sev-badge low">🟢 LOW RISK / SAFE BUFFER</span>
-              <strong className="hm-sev-count">{lowCount} <small>Locations</small></strong>
-            </div>
-            <div className="hm-sev-bar-wrap">
-              <div className="hm-sev-bar low" style={{ width: `${lowPct}%` }} />
-            </div>
-            <div className="hm-sev-meta">
-              <span>{lowPct}% of Monitored City</span>
-              <span>Avg LST: <strong>{avgLowLST}°C</strong></span>
-            </div>
-            <p className="hm-sev-desc">
-              Tree canopy nodes, SGNP forest edge, and creek waterfronts providing natural microclimate cooling and moisture buffering.
-            </p>
-            <div className="hm-sev-footer">
-              <small>{severityFilter === 'Low' ? '✓ Filter Applied (Click to clear)' : 'Click to filter table below'}</small>
-            </div>
-          </div>
-        </div>
-
-        {/* City-Wide Severity Distribution Bar */}
-        <div className="panel hm-distribution-panel">
-          <div className="hm-dist-head">
-            <div>
-              <strong>Thane City-Wide Thermal Severity Balance ({heatmapMode === 'live' ? 'Live Telemetry' : 'Historical Summer Baseline'})</strong>
-              <p>Combined spatial share of High ({highCount}), Moderate ({moderateCount}), and Low ({lowCount}) risk zones across {totalCount} monitored locations</p>
-            </div>
-            <div className="hm-dist-pills">
-              <span className="dist-pill high">High: {highPct}%</span>
-              <span className="dist-pill mod">Moderate: {modPct}%</span>
-              <span className="dist-pill low">Low: {lowPct}%</span>
-            </div>
-          </div>
-          <div className="hm-stacked-bar">
-            <div className="seg high" style={{ width: `${highPct}%` }} title={`High Risk: ${highCount} locations (${highPct}%)`} />
-            <div className="seg mod" style={{ width: `${modPct}%` }} title={`Moderate Risk: ${moderateCount} locations (${modPct}%)`} />
-            <div className="seg low" style={{ width: `${lowPct}%` }} title={`Low Risk: ${lowCount} locations (${lowPct}%)`} />
-          </div>
-        </div>
-
-        {/* Severity Classification Matrix Table */}
-        <div className="panel hm-table-panel">
-          <div className="panel-head hm-table-head">
-            <div>
-              <h2>Severity Classification Matrix · {heatmapMode === 'live' ? 'Live Conditions' : 'Historical Baseline'}</h2>
-              <p>Click any location to lock telemetry and center heatmap view</p>
-            </div>
-            <div className="hm-table-controls">
-              {/* Filter Tabs */}
-              <div className="hm-filter-tabs">
-                <button
-                  type="button"
-                  className={`hm-ftab ${severityFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setSeverityFilter('all')}
-                >
-                  All ({totalCount})
-                </button>
-                <button
-                  type="button"
-                  className={`hm-ftab high ${severityFilter === 'High' ? 'active' : ''}`}
-                  onClick={() => setSeverityFilter('High')}
-                >
-                  High Risk ({highCount})
-                </button>
-                <button
-                  type="button"
-                  className={`hm-ftab mod ${severityFilter === 'Moderate' ? 'active' : ''}`}
-                  onClick={() => setSeverityFilter('Moderate')}
-                >
-                  Moderate ({moderateCount})
-                </button>
-                <button
-                  type="button"
-                  className={`hm-ftab low ${severityFilter === 'Low' ? 'active' : ''}`}
-                  onClick={() => setSeverityFilter('Low')}
-                >
-                  Low Risk ({lowCount})
-                </button>
-              </div>
-
-              {/* Search Bar */}
-              <div className="location-search-box" style={{ width: 220 }}>
-                <Search size={14} color="#888" />
-                <input
-                  type="text"
-                  placeholder="Search zone / landmark..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => setSearchQuery('')}>
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="hist-table-scroll">
-            <table className="hist-table hm-matrix-table">
-              <thead>
-                <tr>
-                  <th>Zone & Location</th>
-                  <th>Severity Tier</th>
-                  <th>{heatmapMode === 'dataset' ? 'Exact LST (Observed)' : 'Surface Temp (LST)'}</th>
-                  <th>{heatmapMode === 'dataset' ? 'PINN Pred. LST' : 'Ambient Temp'}</th>
-                  <th>{heatmapMode === 'dataset' ? 'NDVI (Vegetation)' : 'UHI Offset'}</th>
-                  <th>{heatmapMode === 'dataset' ? 'NDBI (Built-up)' : 'Population Density'}</th>
-                  <th>Key Landmark / Microclimate Node</th>
-                  <th>Cooling Intervention Priority</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedLocations.map(meta => {
-                  const isSelected = meta.loc.id === selectedLocation.id
-                  const isHigh = meta.severity === 'High'
-                  const isMod = meta.severity === 'Moderate'
-
-                  return (
-                    <tr
-                      key={meta.loc.id}
-                      className={`hist-row ${isSelected ? 'active-zone-row' : ''} ${isHigh ? 'hot-row' : ''}`}
-                      onClick={() => onSelectLocation(meta.loc)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td className="hist-date-cell">
-                        <strong>{meta.loc.name} {isSelected && <span className="active-tag">ACTIVE</span>}</strong>
-                        <small>{meta.loc.ward} · {meta.loc.zoneNumber}</small>
-                      </td>
-                      <td>
-                        <span className={`event-badge ${meta.severity.toLowerCase()}`}>
-                          {meta.severity === 'High' ? '🔴 HIGH RISK' : meta.severity === 'Moderate' ? '🟠 MODERATE' : '🟢 LOW RISK'}
-                        </span>
-                      </td>
-                      <td className={isHigh ? 'danger' : ''}>
-                        <strong style={{ fontSize: 13, color: isHigh ? '#ef4444' : isMod ? '#f59e0b' : '#10b981' }}>{meta.lst}°C</strong>
-                      </td>
-                      <td>
-                        {heatmapMode === 'dataset' && meta.pinnPredictedLST != null ? (
-                          <strong style={{ color: '#4ade80' }}>{meta.pinnPredictedLST.toFixed(1)}°C</strong>
-                        ) : (
-                          `${meta.ambientTemp}°C`
-                        )}
-                      </td>
-                      <td>
-                        {heatmapMode === 'dataset' && meta.ndvi != null ? (
-                          <span style={{ color: '#22c55e', fontWeight: 600 }}>{meta.ndvi.toFixed(3)}</span>
-                        ) : (
-                          <span className={`delta-badge ${meta.loc.lstOffset > 0 ? 'up' : meta.loc.lstOffset < 0 ? 'down' : 'neutral'}`}>
-                            {meta.loc.lstOffset >= 0 ? `▲ +${meta.loc.lstOffset}` : `▼ ${meta.loc.lstOffset}`}°C
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {heatmapMode === 'dataset' && meta.ndbi != null ? (
-                          <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{meta.ndbi.toFixed(3)}</span>
-                        ) : (
-                          meta.loc.populationDensity
-                        )}
-                      </td>
-                      <td>
-                        <div>
-                          <strong>{meta.loc.keyLandmark}</strong>
-                          <small style={{ display: 'block', fontSize: '8.5px', color: '#888' }}>{meta.loc.type}</small>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`hm-prio-pill ${meta.coolingPriority.toLowerCase()}`}>
-                          {meta.coolingPriority === 'Emergency' ? '⚡ Emergency Misting' : meta.coolingPriority === 'High' ? '● Shaded Corridors' : '○ Protected Canopy'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -2655,7 +2731,7 @@ function InterventionPlanPage({
 
   // Current baseline temperature for the selected location (e.g. Kalwa at 38°C)
   const baseTemp = Number((38.0 + selectedLocation.lstOffset * 0.4).toFixed(1))
-  
+
   // Total temperature reduction delivered by our multi-vector algorithm for the allocated budget
   const calculatedReduction = Number((Math.min(4.8, 1.25 * Math.pow(budgetCr, 0.68) * (selectedLocation.vulnerability === 'High' ? 1.15 : selectedLocation.vulnerability === 'Moderate' ? 1.0 : 0.88))).toFixed(1))
   const resultingTemp = Number((baseTemp - calculatedReduction).toFixed(1))
@@ -2676,9 +2752,11 @@ function InterventionPlanPage({
 
   return (
     <div className="intervention-page">
-      {/* Page Heading */}
-      <div className="page-heading">
-        <div>
+      {/* ═══════════════════════════════════════════════════════════════
+          A. PAGE HEADER ROW
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="page-heading ip-page-heading">
+        <div className="ip-heading-text">
           <p className="eyebrow" suppressHydrationWarning>
             CIVIC CLIMATE ACTION MATRIX · THANE MUNICIPAL CORPORATION (TMC) · {selectedLocation.name.toUpperCase()} · {time.formatted}
           </p>
@@ -2688,582 +2766,589 @@ function InterventionPlanPage({
             Select your desired target temperature drop (-{targetReduction.toFixed(1)}°C) or adjust the municipal budget meter to automatically configure a verified multi-vector cooling plan from {baseTemp}°C to {resultingTemp}°C.
           </p>
         </div>
-        <div className="intervention-top-badge">
+        <div className="ip-active-zone-badge">
           <span className="live-dot" />
           <span>Active Zone: <strong>{selectedLocation.name} ({selectedLocation.zoneNumber})</strong></span>
         </div>
       </div>
 
-      {/* Location Quick Switcher Bar */}
-      <div className="hist-location-strip">
-        {THANE_LOCATIONS.map(loc => (
-          <button
-            key={loc.id}
-            type="button"
-            className={`hist-loc-chip ${loc.id === selectedLocation.id ? 'active' : ''}`}
-            onClick={() => onSelectLocation(loc)}
-          >
-            <span className={`zone-dot ${loc.vulnerability === 'High' ? 'critical' : loc.vulnerability === 'Low' ? 'safe' : 'watch'}`} />
-            {loc.name}
-          </button>
-        ))}
+      {/* ═══════════════════════════════════════════════════════════════
+          B. WARD SELECTOR SECTION
+          ═══════════════════════════════════════════════════════════════ */}
+      <div className="ip-ward-strip">
+        <div className="ip-ward-chips">
+          {THANE_LOCATIONS.map(loc => (
+            <button
+              key={loc.id}
+              type="button"
+              className={`ip-ward-chip ${loc.id === selectedLocation.id ? 'active' : ''}`}
+              onClick={() => onSelectLocation(loc)}
+            >
+              <span className={`zone-dot ${loc.vulnerability === 'High' ? 'critical' : loc.vulnerability === 'Low' ? 'safe' : 'watch'}`} />
+              {loc.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          BUDGET METER & THERMAL REDUCTION SIMULATOR HERO
+          C. PLANNER & OUTCOME HERO (2-Column Grid, ~60/40, Equal Height)
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="panel ip-simulator-hero">
-        <div className="ip-sim-grid">
-          {/* Left Column: Interactive Controls */}
-          <div className="ip-sim-controls">
-            <div className="ip-section-title">
-              <Sliders size={16} className="text-orange" />
-              <h3>1 · Select Desired Target Temperature Drop</h3>
-            </div>
-            <p className="ip-sub-instruction">
-              Clicking a target drop reconfigures the required municipal budget, vector deliverables, and execution timeline for {selectedLocation.name}:
-            </p>
+      <div className="ip-sim-grid">
+        {/* Left Card: Interactive Controls */}
+        <div className="ip-sim-card ip-sim-controls-card">
+          <div className="ip-section-title">
+            <Sliders size={16} className="text-orange" />
+            <h3>1 · Select Desired Target Temperature Drop</h3>
+          </div>
+          <p className="ip-sub-instruction">
+            Clicking a target drop reconfigures the required municipal budget, vector deliverables, and execution timeline for {selectedLocation.name}:
+          </p>
 
-            {/* Target Reduction Selector (Top Primary Driver) */}
-            <div className="ip-target-selector">
-              <div className="ip-target-buttons">
-                {[1.5, 2.0, 2.5, 3.0, 3.5, 4.0].map(val => (
-                  <button
-                    key={val}
-                    type="button"
-                    className={`ip-target-pill ${targetReduction === val ? 'active' : ''}`}
-                    onClick={() => handleSelectTargetReduction(val)}
-                  >
-                    -{val.toFixed(1)}°C (To {(baseTemp - val).toFixed(1)}°C)
-                  </button>
-                ))}
-              </div>
-              <small className="ip-target-hint">
-                Selected Goal: <strong>-{targetReduction.toFixed(1)}°C Drop</strong> (From {baseTemp}°C down to {targetGoalTemp}°C) → Auto-tuned Budget: <strong>₹{budgetCr.toFixed(2)} Cr</strong>
-              </small>
-            </div>
-
-            {/* Budget Controls (Secondary Driver / Fine-Tuning) */}
-            <div className="ip-section-title" style={{ marginTop: 6 }}>
-              <DollarSign size={16} className="text-orange" />
-              <h3>2 · Government Servant Budget Allocation Meter</h3>
-            </div>
-
-            {/* Budget Presets */}
-            <div className="ip-preset-chips">
-              {BUDGET_PRESETS.map(p => (
+          {/* Target Reduction Selector (Top Primary Driver) */}
+          <div className="ip-target-selector">
+            <div className="ip-target-buttons">
+              {[1.5, 2.0, 2.5, 3.0, 3.5, 4.0].map(val => (
                 <button
-                  key={p.valueCr}
+                  key={val}
                   type="button"
-                  className={`ip-preset-btn ${budgetCr === p.valueCr ? 'active' : ''}`}
-                  onClick={() => setBudgetCr(p.valueCr)}
+                  className={`ip-target-pill ${targetReduction === val ? 'active' : ''}`}
+                  onClick={() => handleSelectTargetReduction(val)}
                 >
-                  <strong>{p.label}</strong>
-                  <small>{p.name}</small>
+                  -{val.toFixed(1)}°C (To {(baseTemp - val).toFixed(1)}°C)
                 </button>
               ))}
             </div>
+            <small className="ip-target-hint">
+              Selected Goal: <strong>-{targetReduction.toFixed(1)}°C Drop</strong> (From {baseTemp}°C down to {targetGoalTemp}°C) → Auto-tuned Budget: <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+            </small>
+          </div>
 
-            {/* Slider Control */}
-            <div className="ip-slider-block">
-              <div className="ip-slider-header">
-                <span>Allocated Municipal Budget:</span>
-                <strong>₹{budgetCr.toFixed(2)} Crore <small>(₹{(budgetCr * 100).toFixed(0)} Lakhs)</small></strong>
-              </div>
-              <input
-                type="range"
-                min="0.25"
-                max="12.0"
-                step="0.25"
-                value={budgetCr}
-                onChange={(e) => setBudgetCr(parseFloat(e.target.value))}
-                className="ip-budget-range"
-              />
-              <div className="ip-range-labels">
-                <span>₹25 Lakhs</span>
-                <span>₹3.5 Cr</span>
-                <span>₹7.0 Cr</span>
-                <span>₹12.0 Cr</span>
-              </div>
+          {/* Divider between Section 1 and 2 */}
+          <div className="ip-card-divider" />
+
+          {/* Budget Controls (Secondary Driver / Fine-Tuning) */}
+          <div className="ip-section-title">
+            <DollarSign size={16} className="text-orange" />
+            <h3>2 · Government Servant Budget Allocation Meter</h3>
+          </div>
+
+          {/* Budget Presets: Even 6-column grid */}
+          <div className="ip-preset-chips">
+            {BUDGET_PRESETS.map(p => (
+              <button
+                key={p.valueCr}
+                type="button"
+                className={`ip-preset-btn ${budgetCr === p.valueCr ? 'active' : ''}`}
+                onClick={() => setBudgetCr(p.valueCr)}
+              >
+                <strong>{p.label}</strong>
+                <small>{p.name}</small>
+              </button>
+            ))}
+          </div>
+
+          {/* Slider Control */}
+          <div className="ip-slider-block">
+            <div className="ip-slider-header">
+              <span>Allocated Municipal Budget:</span>
+              <strong>₹{budgetCr.toFixed(2)} Crore <small>(₹{(budgetCr * 100).toFixed(0)} Lakhs)</small></strong>
+            </div>
+            <input
+              type="range"
+              min="0.25"
+              max="12.0"
+              step="0.25"
+              value={budgetCr}
+              onChange={(e) => setBudgetCr(parseFloat(e.target.value))}
+              className="ip-budget-range"
+            />
+            <div className="ip-range-labels">
+              <span>₹25 Lakhs</span>
+              <span>₹3.5 Cr</span>
+              <span>₹7.0 Cr</span>
+              <span>₹12.0 Cr</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Card: Dynamic Outcome Card */}
+        <div className="ip-sim-card ip-sim-outcome-card">
+          <div className="ip-outcome-header">
+            <span className="eyebrow" style={{ margin: 0 }}>OPTIMIZED CLIMATE IMPACT OUTCOME</span>
+            <span className="badge-best-fit">★ ALGORITHMIC BEST FIT</span>
+          </div>
+
+          <div className="ip-temp-comparison">
+            <div className="ip-temp-box current">
+              <span>Current Baseline</span>
+              <strong>{baseTemp}°C</strong>
+              <small>{selectedLocation.name} ({selectedLocation.ward})</small>
+            </div>
+            <div className="ip-temp-arrow">
+              <ArrowRight size={24} />
+              <span className="ip-delta-tag">-{calculatedReduction}°C Drop</span>
+            </div>
+            <div className="ip-temp-box projected">
+              <span>Projected Temperature</span>
+              <strong>{resultingTemp}°C</strong>
+              <small>Goal: {targetGoalTemp}°C</small>
             </div>
           </div>
 
-          {/* Right Column: Dynamic Outcome Card */}
-          <div className="ip-sim-outcome">
-            <div className="ip-outcome-header">
-              <span className="eyebrow" style={{ margin: 0 }}>OPTIMIZED CLIMATE IMPACT OUTCOME</span>
-              <span className="badge-best-fit">★ ALGORITHMIC BEST FIT</span>
+          {/* Goal Fulfillment Bar */}
+          <div className="ip-goal-progress">
+            <div className="ip-goal-label">
+              <span>Target Goal Fulfillment ({calculatedReduction}°C of -{targetReduction}°C Goal):</span>
+              <strong>{goalAchievementPct}% Achieved</strong>
             </div>
-
-            <div className="ip-temp-comparison">
-              <div className="ip-temp-box current">
-                <span>Current Baseline</span>
-                <strong>{baseTemp}°C</strong>
-                <small>{selectedLocation.name} ({selectedLocation.ward})</small>
-              </div>
-              <div className="ip-temp-arrow">
-                <ArrowRight size={24} />
-                <span className="ip-delta-tag">-{calculatedReduction}°C Drop</span>
-              </div>
-              <div className="ip-temp-box projected">
-                <span>Projected Temperature</span>
-                <strong>{resultingTemp}°C</strong>
-                <small>Goal: {targetGoalTemp}°C</small>
-              </div>
+            <div className="ip-progress-track">
+              <div
+                className="ip-progress-fill"
+                style={{ width: `${goalAchievementPct}%`, background: goalAchievementPct >= 90 ? '#16a34a' : '#e86631' }}
+              />
             </div>
+          </div>
 
-            {/* Goal Fulfillment Bar */}
-            <div className="ip-goal-progress">
-              <div className="ip-goal-label">
-                <span>Target Goal Fulfillment ({calculatedReduction}°C of -{targetReduction}°C Goal):</span>
-                <strong>{goalAchievementPct}% Achieved</strong>
-              </div>
-              <div className="ip-progress-track">
-                <div
-                  className="ip-progress-fill"
-                  style={{ width: `${goalAchievementPct}%`, background: goalAchievementPct >= 90 ? '#16a34a' : '#e86631' }}
-                />
-              </div>
+          {/* Co-Benefit KPI Matrix */}
+          <div className="ip-outcome-stats">
+            <div className="ip-stat-mini">
+              <span className="ip-mini-label">Residents Protected</span>
+              <strong>{beneficiariesCount.toLocaleString()}</strong>
+              <small>Ward population shielded</small>
             </div>
-
-            {/* Co-Benefit KPI Matrix */}
-            <div className="ip-outcome-stats">
-              <div className="ip-stat-mini">
-                <span className="ip-mini-label">Residents Protected</span>
-                <strong>{beneficiariesCount.toLocaleString()}</strong>
-                <small>Ward population shielded</small>
-              </div>
-              <div className="ip-stat-mini">
-                <span className="ip-mini-label">5-Year Healthcare ROI</span>
-                <strong style={{ color: '#16a34a' }}>₹{healthSavingsCr} Cr</strong>
-                <small>4.65x Public Health Return</small>
-              </div>
-              <div className="ip-stat-mini">
-                <span className="ip-mini-label">CO₂ Carbon Offset</span>
-                <strong>{co2OffsetTons} Tons/yr</strong>
-                <small>Sequestration & cooling</small>
-              </div>
+            <div className="ip-stat-mini">
+              <span className="ip-mini-label">5-Year Healthcare ROI</span>
+              <strong style={{ color: '#16a34a' }}>₹{healthSavingsCr} Cr</strong>
+              <small>4.65x Public Health Return</small>
+            </div>
+            <div className="ip-stat-mini">
+              <span className="ip-mini-label">CO₂ Carbon Offset</span>
+              <strong>{co2OffsetTons} Tons/yr</strong>
+              <small>Sequestration & cooling</small>
             </div>
           </div>
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          NAVIGATION TABS (Solution Portfolio | 4-Way Comparison | Roadmap)
+          D. TAB SECTION (Full Width, Segmented Row)
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="hist-tabs" style={{ marginTop: 14 }}>
-        <button
-          type="button"
-          className={`hist-tab ${activeStrategyTab === 'solution' ? 'active' : ''}`}
-          onClick={() => setActiveStrategyTab('solution')}
-        >
-          1 · Optimized Solution Portfolio (Targeting -{targetReduction}°C in ₹{budgetCr.toFixed(2)} Cr)
-        </button>
-        <button
-          type="button"
-          className={`hist-tab ${activeStrategyTab === 'comparison' ? 'active' : ''}`}
-          onClick={() => setActiveStrategyTab('comparison')}
-        >
-          2 · Proof: 4-Way Strategy Comparison ("Why Blind Approaches Fail")
-        </button>
-        <button
-          type="button"
-          className={`hist-tab ${activeStrategyTab === 'roadmap' ? 'active' : ''}`}
-          onClick={() => setActiveStrategyTab('roadmap')}
-        >
-          3 · Execution Flow Roadmap (Phased To -{targetReduction}°C Goal)
-        </button>
-      </div>
+      <div className="ip-tabs-section">
+        <div className="ip-tabs-bar">
+          <button
+            type="button"
+            className={`ip-tab-btn ${activeStrategyTab === 'solution' ? 'active' : ''}`}
+            onClick={() => setActiveStrategyTab('solution')}
+          >
+            1 · Optimized Solution Portfolio (Targeting -{targetReduction}°C in ₹{budgetCr.toFixed(2)} Cr)
+          </button>
+          <button
+            type="button"
+            className={`ip-tab-btn ${activeStrategyTab === 'comparison' ? 'active' : ''}`}
+            onClick={() => setActiveStrategyTab('comparison')}
+          >
+            2 · Proof: 4-Way Strategy Comparison ("Why Blind Approaches Fail")
+          </button>
+          <button
+            type="button"
+            className={`ip-tab-btn ${activeStrategyTab === 'roadmap' ? 'active' : ''}`}
+            onClick={() => setActiveStrategyTab('roadmap')}
+          >
+            3 · Execution Flow Roadmap (Phased To -{targetReduction}°C Goal)
+          </button>
+        </div>
 
-      {/* ── TAB 1: OPTIMIZED SOLUTION PORTFOLIO ── */}
-      {activeStrategyTab === 'solution' && (
-        <div className="ip-tab-content">
-          <div className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Tailored Multi-Vector Intervention Package · Achieving -{targetReduction}°C in {selectedLocation.name}</h2>
-                <p>
-                  Optimized resource distribution of ₹{budgetCr.toFixed(2)} Crore (₹{(budgetCr * 100).toFixed(0)} Lakhs) delivering verified <strong>-{calculatedReduction}°C cooling drawdown</strong> to reach <strong>{resultingTemp}°C</strong>.
-                </p>
+        {/* ── TAB 1: OPTIMIZED SOLUTION PORTFOLIO ── */}
+        {activeStrategyTab === 'solution' && (
+          <div className="ip-tab-content">
+            <div className="panel ip-tab-panel">
+              <div className="panel-head ip-vec-panel-head">
+                <div className="ip-vec-head-info">
+                  <h2>Tailored Multi-Vector Intervention Package · Achieving -{targetReduction}°C in {selectedLocation.name}</h2>
+                  <p>
+                    Optimized resource distribution of ₹{budgetCr.toFixed(2)} Crore (₹{(budgetCr * 100).toFixed(0)} Lakhs) delivering verified <strong>-{calculatedReduction}°C cooling drawdown</strong> to reach <strong>{resultingTemp}°C</strong>.
+                  </p>
+                </div>
+                <span className="badge-best-fit">5 Synergistic Vectors</span>
               </div>
-              <span className="badge-best-fit">5 Synergistic Vectors</span>
-            </div>
 
-            <div className="ip-vectors-grid">
-              {INTERVENTION_VECTORS.map(vec => {
-                const VectorIcon = vec.icon
-                const allocatedLakhs = Number((budgetCr * 100 * (vec.baseSharePct / 100)).toFixed(1))
-                const vecTempDrop = Number((calculatedReduction * (vec.baseSharePct / 100) * 1.05).toFixed(2))
-                const scaledUnits = Math.round(allocatedLakhs * (vec.id === 'cool-roofs' ? 1200 : vec.id === 'miyawaki-trees' ? 95 : vec.id === 'water-bodies' ? 180 : vec.id === 'permeable-pavements' ? 240 : 45))
+              <div className="ip-vectors-grid">
+                {INTERVENTION_VECTORS.map(vec => {
+                  const VectorIcon = vec.icon
+                  const allocatedLakhs = Number((budgetCr * 100 * (vec.baseSharePct / 100)).toFixed(1))
+                  const vecTempDrop = Number((calculatedReduction * (vec.baseSharePct / 100) * 1.05).toFixed(2))
+                  const scaledUnits = Math.round(allocatedLakhs * (vec.id === 'cool-roofs' ? 1200 : vec.id === 'miyawaki-trees' ? 95 : vec.id === 'water-bodies' ? 180 : vec.id === 'permeable-pavements' ? 240 : 45))
 
-                return (
-                  <div key={vec.id} className="ip-vector-card" style={{ borderTopColor: vec.color }}>
-                    <div className="ip-vec-top">
-                      <div className="ip-vec-icon" style={{ background: `${vec.color}18`, color: vec.color }}>
-                        <VectorIcon size={20} />
-                      </div>
-                      <div>
-                        <div className="ip-vec-name">{vec.name}</div>
-                        <div className="ip-vec-budget">
-                          Allocated: <strong>₹{allocatedLakhs} Lakhs</strong> ({vec.baseSharePct}% of budget)
+                  return (
+                    <div key={vec.id} className="ip-vector-card" style={{ borderTopColor: vec.color }}>
+                      <div className="ip-vec-top">
+                        <div className="ip-vec-icon" style={{ background: `${vec.color}18`, color: vec.color }}>
+                          <VectorIcon size={20} />
+                        </div>
+                        <div className="ip-vec-title-area">
+                          <div className="ip-vec-name">{vec.name}</div>
+                          <div className="ip-vec-budget">
+                            Allocated: <strong>₹{allocatedLakhs} Lakhs</strong> ({vec.baseSharePct}% of budget)
+                          </div>
+                        </div>
+                        <div className="ip-vec-cooling-tag" style={{ background: `${vec.color}15`, color: vec.color }}>
+                          -{vecTempDrop}°C of -{targetReduction}°C
                         </div>
                       </div>
-                      <div className="ip-vec-cooling-tag" style={{ background: `${vec.color}15`, color: vec.color }}>
-                        -{vecTempDrop}°C of -{targetReduction}°C
+
+                      <div className="ip-vec-deliverable">
+                        <strong>Deployable Scale:</strong> {scaledUnits.toLocaleString()} {vec.unitDescription}
+                      </div>
+
+                      <div className="ip-vec-meta-row">
+                        <span>⚡ First Impact: <strong>Day {vec.timeToImpactDays}</strong></span>
+                        <span>⏳ Lifespan: <strong>{vec.lifespanYears} Years</strong></span>
+                      </div>
+
+                      <div className="ip-vec-benefits">
+                        <small>Civic Co-Benefits:</small>
+                        <ul>
+                          {vec.coBenefits.map((b, i) => (
+                            <li key={i}>{b}</li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
-
-                    <div className="ip-vec-deliverable">
-                      <strong>Deployable Scale:</strong> {scaledUnits.toLocaleString()} {vec.unitDescription}
-                    </div>
-
-                    <div className="ip-vec-meta-row">
-                      <span>⚡ First Impact: <strong>Day {vec.timeToImpactDays}</strong></span>
-                      <span>⏳ Lifespan: <strong>{vec.lifespanYears} Years</strong></span>
-                    </div>
-
-                    <div className="ip-vec-benefits">
-                      <small>Civic Co-Benefits:</small>
-                      <ul>
-                        {vec.coBenefits.map((b, i) => (
-                          <li key={i}>{b}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── TAB 2: PROOF - 4-WAY COMPARISON ── */}
-      {activeStrategyTab === 'comparison' && (
-        <div className="ip-tab-content">
-          <div className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Empirical Proof: Why Conventional Government Approaches Fail to Deliver -{targetReduction}°C</h2>
-                <p>
-                  Comparing 4 municipal deployment strategies for {selectedLocation.name} evaluated against your chosen target drop of <strong>-{targetReduction}°C</strong> within ₹{budgetCr.toFixed(2)} Crore.
-                </p>
-              </div>
-              <span className="hist-record-count">4 Empirical Scenarios</span>
-            </div>
-
-            <div className="ip-comparison-grid">
-              {/* Scenario 1: Blind Tree Plantation */}
-              <div className="ip-compare-card failure">
-                <div className="ip-card-badge fail">❌ BLIND STRATEGY 1</div>
-                <h3>"Only 1,000 Random Trees"</h3>
-                <p className="ip-compare-sub">Conventional municipal mass sapling plantation without soil analysis or irrigation network.</p>
-
-                <div className="ip-compare-metric">
-                  <span>Target Fulfillment:</span>
-                  <strong className="fail">Only -0.2°C (Fails by {(targetReduction - 0.2).toFixed(1)}°C)</strong>
-                </div>
-
-                <div className="ip-compare-stat-row">
-                  <div>
-                    <span>Budget Spent:</span>
-                    <strong>₹{budgetCr.toFixed(2)} Cr</strong>
-                  </div>
-                  <div>
-                    <span>Goal Met:</span>
-                    <strong className="fail">{Math.round((0.2 / targetReduction) * 100)}%</strong>
-                  </div>
-                  <div>
-                    <span>Efficiency Score:</span>
-                    <strong className="fail">18 / 100</strong>
-                  </div>
-                </div>
-
-                <div className="ip-flaw-box">
-                  <strong>Critical Vulnerability / Why it Fails:</strong>
+        {/* ── TAB 2: PROOF - 4-WAY COMPARISON ── */}
+        {activeStrategyTab === 'comparison' && (
+          <div className="ip-tab-content">
+            <div className="panel ip-tab-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Empirical Proof: Why Conventional Government Approaches Fail to Deliver -{targetReduction}°C</h2>
                   <p>
-                    Planting saplings randomly along concrete curbs results in <strong>65–70% sapling mortality</strong> in summer heat. Delivers only -0.2°C out of your -{targetReduction}°C goal, leaving citizens vulnerable for 6+ years.
+                    Comparing 4 municipal deployment strategies for {selectedLocation.name} evaluated against your chosen target drop of <strong>-{targetReduction}°C</strong> within ₹{budgetCr.toFixed(2)} Crore.
                   </p>
                 </div>
+                <span className="hist-record-count">4 Empirical Scenarios</span>
               </div>
 
-              {/* Scenario 2: Isolated Roof Painting */}
-              <div className="ip-compare-card failure">
-                <div className="ip-card-badge fail">❌ BLIND STRATEGY 2</div>
-                <h3>"Isolated Roof Painting Only"</h3>
-                <p className="ip-compare-sub">Applying cool roof paint on municipal buildings without street shading or water recharge.</p>
+              <div className="ip-comparison-grid">
+                {/* Scenario 1: Blind Tree Plantation */}
+                <div className="ip-compare-card failure">
+                  <div className="ip-card-badge fail">❌ BLIND STRATEGY 1</div>
+                  <h3>"Only 1,000 Random Trees"</h3>
+                  <p className="ip-compare-sub">Conventional municipal mass sapling plantation without soil analysis or irrigation network.</p>
 
-                <div className="ip-compare-metric">
-                  <span>Target Fulfillment:</span>
-                  <strong className="fail">Only -0.5°C (Fails by {(targetReduction - 0.5).toFixed(1)}°C)</strong>
+                  <div className="ip-compare-metric">
+                    <span>Target Fulfillment:</span>
+                    <strong className="fail">Only -0.2°C (Fails by {(targetReduction - 0.2).toFixed(1)}°C)</strong>
+                  </div>
+
+                  <div className="ip-compare-stat-row">
+                    <div>
+                      <span>Budget Spent:</span>
+                      <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+                    </div>
+                    <div>
+                      <span>Goal Met:</span>
+                      <strong className="fail">{Math.round((0.2 / targetReduction) * 100)}%</strong>
+                    </div>
+                    <div>
+                      <span>Efficiency Score:</span>
+                      <strong className="fail">18 / 100</strong>
+                    </div>
+                  </div>
+
+                  <div className="ip-flaw-box">
+                    <strong>Critical Vulnerability / Why it Fails:</strong>
+                    <p>
+                      Planting saplings randomly along concrete curbs results in <strong>65–70% sapling mortality</strong> in summer heat. Delivers only -0.2°C out of your -{targetReduction}°C goal, leaving citizens vulnerable for 6+ years.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="ip-compare-stat-row">
-                  <div>
-                    <span>Budget Spent:</span>
-                    <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+                {/* Scenario 2: Isolated Roof Painting */}
+                <div className="ip-compare-card failure">
+                  <div className="ip-card-badge fail">❌ BLIND STRATEGY 2</div>
+                  <h3>"Isolated Roof Painting Only"</h3>
+                  <p className="ip-compare-sub">Applying cool roof paint on municipal buildings without street shading or water recharge.</p>
+
+                  <div className="ip-compare-metric">
+                    <span>Target Fulfillment:</span>
+                    <strong className="fail">Only -0.5°C (Fails by {(targetReduction - 0.5).toFixed(1)}°C)</strong>
                   </div>
-                  <div>
-                    <span>Goal Met:</span>
-                    <strong className="fail">{Math.round((0.5 / targetReduction) * 100)}%</strong>
+
+                  <div className="ip-compare-stat-row">
+                    <div>
+                      <span>Budget Spent:</span>
+                      <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+                    </div>
+                    <div>
+                      <span>Goal Met:</span>
+                      <strong className="fail">{Math.round((0.5 / targetReduction) * 100)}%</strong>
+                    </div>
+                    <div>
+                      <span>Efficiency Score:</span>
+                      <strong className="fail">36 / 100</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>Efficiency Score:</span>
-                    <strong className="fail">36 / 100</strong>
+
+                  <div className="ip-flaw-box">
+                    <strong>Critical Vulnerability / Why it Fails:</strong>
+                    <p>
+                      Only cools top-floor indoor rooms. Pedestrians, roadside workers, and commuters continue facing severe heat stress from ground asphalt heat re-radiation. Achieves only {Math.round((0.5 / targetReduction) * 100)}% of your target.
+                    </p>
                   </div>
                 </div>
 
-                <div className="ip-flaw-box">
-                  <strong>Critical Vulnerability / Why it Fails:</strong>
-                  <p>
-                    Only cools top-floor indoor rooms. Pedestrians, roadside workers, and commuters continue facing severe heat stress from ground asphalt heat re-radiation. Achieves only {Math.round((0.5 / targetReduction) * 100)}% of your target.
-                  </p>
+                {/* Scenario 3: Heavy Civil Ornamental Fountains */}
+                <div className="ip-compare-card failure">
+                  <div className="ip-card-badge fail">❌ BLIND STRATEGY 3</div>
+                  <h3>"Heavy Civil Ornamental Fountains"</h3>
+                  <p className="ip-compare-sub">Building high-cost concrete decorative fountains without natural wetland vegetation.</p>
+
+                  <div className="ip-compare-metric">
+                    <span>Target Fulfillment:</span>
+                    <strong className="fail">Only -0.3°C (Fails by {(targetReduction - 0.3).toFixed(1)}°C)</strong>
+                  </div>
+
+                  <div className="ip-compare-stat-row">
+                    <div>
+                      <span>Budget Spent:</span>
+                      <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+                    </div>
+                    <div>
+                      <span>Goal Met:</span>
+                      <strong className="fail">{Math.round((0.3 / targetReduction) * 100)}%</strong>
+                    </div>
+                    <div>
+                      <span>Efficiency Score:</span>
+                      <strong className="fail">24 / 100</strong>
+                    </div>
+                  </div>
+
+                  <div className="ip-flaw-box">
+                    <strong>Critical Vulnerability / Why it Fails:</strong>
+                    <p>
+                      Huge civil engineering expenditure with high electricity bills and pump breakdowns. Microclimate cooling radius is restricted to only 40 meters, leaving 96% of {selectedLocation.name} unprotected.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Scenario 4: HeatShield Multi-Vector Optimal Solution */}
+                <div className="ip-compare-card victory">
+                  <div className="ip-card-badge success">✅ HEATSHIELD BEST FIT</div>
+                  <h3>"Multi-Vector Algorithmic Package"</h3>
+                  <p className="ip-compare-sub">Our balanced 5-layer solution: Cool roofs + Miyawaki micro-forest + Talao aeration + Porous paving.</p>
+
+                  <div className="ip-compare-metric">
+                    <span>Target Fulfillment:</span>
+                    <strong className="success">-{calculatedReduction}°C (100% of -{targetReduction}°C Goal)</strong>
+                  </div>
+
+                  <div className="ip-compare-stat-row">
+                    <div>
+                      <span>Budget Spent:</span>
+                      <strong>₹{budgetCr.toFixed(2)} Cr</strong>
+                    </div>
+                    <div>
+                      <span>Goal Met:</span>
+                      <strong className="success">{goalAchievementPct}% (Full Drop)</strong>
+                    </div>
+                    <div>
+                      <span>Efficiency Score:</span>
+                      <strong className="success">96 / 100</strong>
+                    </div>
+                  </div>
+
+                  <div className="ip-flaw-box success">
+                    <strong>Why Our Solution is the Best Fit:</strong>
+                    <p>
+                      <strong>Synergistic layered cooling:</strong> Cool roofs give instant -{(targetReduction * 0.35).toFixed(1)}°C drop in Day 30; retention pond aeration provides -{(targetReduction * 0.20).toFixed(1)}°C evaporative cooling by Day 90; Miyawaki canopy locks in permanent -{(targetReduction * 0.30).toFixed(1)}°C by Year 2. Delivers <strong>4.8x higher cooling per rupee</strong> with 94% tree survival via smart sensors.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Scenario 3: Heavy Civil Ornamental Fountains */}
-              <div className="ip-compare-card failure">
-                <div className="ip-card-badge fail">❌ BLIND STRATEGY 3</div>
-                <h3>"Heavy Civil Ornamental Fountains"</h3>
-                <p className="ip-compare-sub">Building high-cost concrete decorative fountains without natural wetland vegetation.</p>
-
-                <div className="ip-compare-metric">
-                  <span>Target Fulfillment:</span>
-                  <strong className="fail">Only -0.3°C (Fails by {(targetReduction - 0.3).toFixed(1)}°C)</strong>
-                </div>
-
-                <div className="ip-compare-stat-row">
-                  <div>
-                    <span>Budget Spent:</span>
-                    <strong>₹{budgetCr.toFixed(2)} Cr</strong>
-                  </div>
-                  <div>
-                    <span>Goal Met:</span>
-                    <strong className="fail">{Math.round((0.3 / targetReduction) * 100)}%</strong>
-                  </div>
-                  <div>
-                    <span>Efficiency Score:</span>
-                    <strong className="fail">24 / 100</strong>
-                  </div>
-                </div>
-
-                <div className="ip-flaw-box">
-                  <strong>Critical Vulnerability / Why it Fails:</strong>
-                  <p>
-                    Huge civil engineering expenditure with high electricity bills and pump breakdowns. Microclimate cooling radius is restricted to only 40 meters, leaving 96% of {selectedLocation.name} unprotected.
-                  </p>
-                </div>
+              {/* Comparison Matrix Table */}
+              <div className="hist-table-scroll" style={{ marginTop: 16 }}>
+                <table className="hist-table">
+                  <thead>
+                    <tr>
+                      <th>Strategy Approach</th>
+                      <th>Temperature Drop</th>
+                      <th>Target Goal Met (-{targetReduction}°C)</th>
+                      <th>Time to First Impact</th>
+                      <th>Citizen Reach</th>
+                      <th>Survival / Durability</th>
+                      <th>5-Year Health ROI</th>
+                      <th>Verdict</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="hist-row">
+                      <td><strong>Strategy 1: 1,000 Random Trees Only</strong></td>
+                      <td className="danger"><strong>-0.2°C</strong></td>
+                      <td className="danger"><strong>{Math.round((0.2 / targetReduction) * 100)}% (Fails)</strong></td>
+                      <td>6–8 Years</td>
+                      <td>12,000 citizens</td>
+                      <td className="danger">32% Survival</td>
+                      <td>0.8x (Loss)</td>
+                      <td><span className="event-badge critical">Inadequate Waste</span></td>
+                    </tr>
+                    <tr className="hist-row">
+                      <td><strong>Strategy 2: Isolated Roof Paint Only</strong></td>
+                      <td className="danger"><strong>-0.5°C</strong></td>
+                      <td className="danger"><strong>{Math.round((0.5 / targetReduction) * 100)}% (Fails)</strong></td>
+                      <td>45 Days</td>
+                      <td>24,000 citizens</td>
+                      <td>4–5 Years</td>
+                      <td>1.4x (Marginal)</td>
+                      <td><span className="event-badge high">Partial Indoor Only</span></td>
+                    </tr>
+                    <tr className="hist-row">
+                      <td><strong>Strategy 3: Ornamental Fountains</strong></td>
+                      <td className="danger"><strong>-0.3°C</strong></td>
+                      <td className="danger"><strong>{Math.round((0.3 / targetReduction) * 100)}% (Fails)</strong></td>
+                      <td>12 Months</td>
+                      <td>8,500 citizens</td>
+                      <td>High Breakdown Rate</td>
+                      <td>0.5x (Net Deficit)</td>
+                      <td><span className="event-badge critical">High OpEx Drain</span></td>
+                    </tr>
+                    <tr className="hist-row active-zone-row">
+                      <td><strong>Strategy 4: HeatShield Multi-Vector Fit</strong></td>
+                      <td style={{ color: '#16a34a' }}><strong>-{calculatedReduction}°C</strong></td>
+                      <td style={{ color: '#16a34a' }}><strong>{goalAchievementPct}% (Full Goal)</strong></td>
+                      <td><strong>Day 30 (Rapid)</strong></td>
+                      <td><strong>{beneficiariesCount.toLocaleString()} citizens</strong></td>
+                      <td style={{ color: '#16a34a' }}><strong>94% Sensor Monitored</strong></td>
+                      <td style={{ color: '#16a34a' }}><strong>4.65x Public ROI</strong></td>
+                      <td><span className="event-badge normal">★ Optimal Fit Choice</span></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-
-              {/* Scenario 4: HeatShield Multi-Vector Optimal Solution */}
-              <div className="ip-compare-card victory">
-                <div className="ip-card-badge success">✅ HEATSHIELD BEST FIT</div>
-                <h3>"Multi-Vector Algorithmic Package"</h3>
-                <p className="ip-compare-sub">Our balanced 5-layer solution: Cool roofs + Miyawaki micro-forest + Talao aeration + Porous paving.</p>
-
-                <div className="ip-compare-metric">
-                  <span>Target Fulfillment:</span>
-                  <strong className="success">-{calculatedReduction}°C (100% of -{targetReduction}°C Goal)</strong>
-                </div>
-
-                <div className="ip-compare-stat-row">
-                  <div>
-                    <span>Budget Spent:</span>
-                    <strong>₹{budgetCr.toFixed(2)} Cr</strong>
-                  </div>
-                  <div>
-                    <span>Goal Met:</span>
-                    <strong className="success">{goalAchievementPct}% (Full Drop)</strong>
-                  </div>
-                  <div>
-                    <span>Efficiency Score:</span>
-                    <strong className="success">96 / 100</strong>
-                  </div>
-                </div>
-
-                <div className="ip-flaw-box success">
-                  <strong>Why Our Solution is the Best Fit:</strong>
-                  <p>
-                    <strong>Synergistic layered cooling:</strong> Cool roofs give instant -{(targetReduction * 0.35).toFixed(1)}°C drop in Day 30; retention pond aeration provides -{(targetReduction * 0.20).toFixed(1)}°C evaporative cooling by Day 90; Miyawaki canopy locks in permanent -{(targetReduction * 0.30).toFixed(1)}°C by Year 2. Delivers <strong>4.8x higher cooling per rupee</strong> with 94% tree survival via smart sensors.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Comparison Matrix Table */}
-            <div className="hist-table-scroll" style={{ marginTop: 16 }}>
-              <table className="hist-table">
-                <thead>
-                  <tr>
-                    <th>Strategy Approach</th>
-                    <th>Temperature Drop</th>
-                    <th>Target Goal Met (-{targetReduction}°C)</th>
-                    <th>Time to First Impact</th>
-                    <th>Citizen Reach</th>
-                    <th>Survival / Durability</th>
-                    <th>5-Year Health ROI</th>
-                    <th>Verdict</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hist-row">
-                    <td><strong>Strategy 1: 1,000 Random Trees Only</strong></td>
-                    <td className="danger"><strong>-0.2°C</strong></td>
-                    <td className="danger"><strong>{Math.round((0.2 / targetReduction) * 100)}% (Fails)</strong></td>
-                    <td>6–8 Years</td>
-                    <td>12,000 citizens</td>
-                    <td className="danger">32% Survival</td>
-                    <td>0.8x (Loss)</td>
-                    <td><span className="event-badge critical">Inadequate Waste</span></td>
-                  </tr>
-                  <tr className="hist-row">
-                    <td><strong>Strategy 2: Isolated Roof Paint Only</strong></td>
-                    <td className="danger"><strong>-0.5°C</strong></td>
-                    <td className="danger"><strong>{Math.round((0.5 / targetReduction) * 100)}% (Fails)</strong></td>
-                    <td>45 Days</td>
-                    <td>24,000 citizens</td>
-                    <td>4–5 Years</td>
-                    <td>1.4x (Marginal)</td>
-                    <td><span className="event-badge high">Partial Indoor Only</span></td>
-                  </tr>
-                  <tr className="hist-row">
-                    <td><strong>Strategy 3: Ornamental Fountains</strong></td>
-                    <td className="danger"><strong>-0.3°C</strong></td>
-                    <td className="danger"><strong>{Math.round((0.3 / targetReduction) * 100)}% (Fails)</strong></td>
-                    <td>12 Months</td>
-                    <td>8,500 citizens</td>
-                    <td>High Breakdown Rate</td>
-                    <td>0.5x (Net Deficit)</td>
-                    <td><span className="event-badge critical">High OpEx Drain</span></td>
-                  </tr>
-                  <tr className="hist-row active-zone-row">
-                    <td><strong>Strategy 4: HeatShield Multi-Vector Fit</strong></td>
-                    <td style={{ color: '#16a34a' }}><strong>-{calculatedReduction}°C</strong></td>
-                    <td style={{ color: '#16a34a' }}><strong>{goalAchievementPct}% (Full Goal)</strong></td>
-                    <td><strong>Day 30 (Rapid)</strong></td>
-                    <td><strong>{beneficiariesCount.toLocaleString()} citizens</strong></td>
-                    <td style={{ color: '#16a34a' }}><strong>94% Sensor Monitored</strong></td>
-                    <td style={{ color: '#16a34a' }}><strong>4.65x Public ROI</strong></td>
-                    <td><span className="event-badge normal">★ Optimal Fit Choice</span></td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── TAB 3: EXECUTION ROADMAP FLOW ── */}
-      {activeStrategyTab === 'roadmap' && (
-        <div className="ip-tab-content">
-          <div className="panel">
-            <div className="panel-head">
-              <div>
-                <h2>Phased Execution Roadmap · Delivering -{targetReduction}°C from Day 1 to Year 5</h2>
-                <p>
-                  Structured municipal timeline flow showing sequential milestones, actions, and cumulative temperature reduction for {selectedLocation.name} to achieve <strong>{targetGoalTemp}°C (from {baseTemp}°C)</strong>.
-                </p>
-              </div>
-              <span className="badge-best-fit">4 Phased Milestones</span>
-            </div>
-
-            <div className="ip-roadmap-track">
-              {/* Phase 1 */}
-              <div className="ip-phase-card">
-                <div className="ip-phase-marker">
-                  <div className="ip-marker-circle">1</div>
-                  <div className="ip-marker-line" />
-                </div>
-                <div className="ip-phase-body">
-                  <div className="ip-phase-header">
-                    <span className="ip-phase-tag">DAY 1 – DAY 45</span>
-                    <h3>Phase 1: Emergency Thermal Shield & Rapid Cool Roofs</h3>
-                    <span className="ip-phase-drop">-{(targetReduction * 0.36).toFixed(1)}°C Immediate Relief</span>
-                  </div>
+        {/* ── TAB 3: EXECUTION ROADMAP FLOW ── */}
+        {activeStrategyTab === 'roadmap' && (
+          <div className="ip-tab-content">
+            <div className="panel ip-tab-panel">
+              <div className="panel-head">
+                <div>
+                  <h2>Phased Execution Roadmap · Delivering -{targetReduction}°C from Day 1 to Year 5</h2>
                   <p>
-                    Immediate deployment of high-albedo solar reflective coatings on municipal schools, hospitals, and dense slum settlements across {selectedLocation.name}. Installation of mobile solar misting stations at high-footfall transit terminals.
+                    Structured municipal timeline flow showing sequential milestones, actions, and cumulative temperature reduction for {selectedLocation.name} to achieve <strong>{targetGoalTemp}°C (from {baseTemp}°C)</strong>.
                   </p>
-                  <div className="ip-phase-actions">
-                    <span>✓ Complete rooftop cleaning & surface preparation</span>
-                    <span>✓ Apply 2 coats of elastomeric high-SRI coating (SRI 108)</span>
-                    <span>✓ Deploy mobile misting hubs at commuter pedestrian chokepoints</span>
-                  </div>
                 </div>
+                <span className="badge-best-fit">4 Phased Milestones</span>
               </div>
 
-              {/* Phase 2 */}
-              <div className="ip-phase-card">
-                <div className="ip-phase-marker">
-                  <div className="ip-marker-circle">2</div>
-                  <div className="ip-marker-line" />
-                </div>
-                <div className="ip-phase-body">
-                  <div className="ip-phase-header">
-                    <span className="ip-phase-tag">DAY 46 – DAY 180</span>
-                    <h3>Phase 2: Blue-Green Talao Restoration & Porous Walkways</h3>
-                    <span className="ip-phase-drop">-{(targetReduction * 0.60).toFixed(1)}°C Cumulative Relief</span>
+              <div className="ip-roadmap-track">
+                {/* Phase 1 */}
+                <div className="ip-phase-card">
+                  <div className="ip-phase-marker">
+                    <div className="ip-marker-circle">1</div>
+                    <div className="ip-marker-line" />
                   </div>
-                  <p>
-                    Desilting of retention ponds and installation of solar-powered aeration fountains. Replacement of heat-trapping asphalt with permeable cool paving.
-                  </p>
-                  <div className="ip-phase-actions">
-                    <span>✓ Excavate & desilt retention pond bed in {selectedLocation.ward}</span>
-                    <span>✓ Commission floating solar microclimate aeration fountains</span>
-                    <span>✓ Lay interlocking porous concrete pavers along transit corridors</span>
+                  <div className="ip-phase-body">
+                    <div className="ip-phase-header">
+                      <span className="ip-phase-tag">DAY 1 – DAY 45</span>
+                      <h3>Phase 1: Emergency Thermal Shield & Rapid Cool Roofs</h3>
+                      <span className="ip-phase-drop">-{(targetReduction * 0.36).toFixed(1)}°C Immediate Relief</span>
+                    </div>
+                    <p>
+                      Immediate deployment of high-albedo solar reflective coatings on municipal schools, hospitals, and dense slum settlements across {selectedLocation.name}. Installation of mobile solar misting stations at high-footfall transit terminals.
+                    </p>
+                    <div className="ip-phase-actions">
+                      <span>✓ Complete rooftop cleaning & surface preparation</span>
+                      <span>✓ Apply 2 coats of elastomeric high-SRI coating (SRI 108)</span>
+                      <span>✓ Deploy mobile misting hubs at commuter pedestrian chokepoints</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Phase 3 */}
-              <div className="ip-phase-card">
-                <div className="ip-phase-marker">
-                  <div className="ip-marker-circle">3</div>
-                  <div className="ip-marker-line" />
-                </div>
-                <div className="ip-phase-body">
-                  <div className="ip-phase-header">
-                    <span className="ip-phase-tag">YEAR 1 – YEAR 2</span>
-                    <h3>Phase 3: Miyawaki Micro-Forest Canopy & Vertical Walls</h3>
-                    <span className="ip-phase-drop">-{(targetReduction * 0.85).toFixed(1)}°C Cumulative Relief</span>
+                {/* Phase 2 */}
+                <div className="ip-phase-card">
+                  <div className="ip-phase-marker">
+                    <div className="ip-marker-circle">2</div>
+                    <div className="ip-marker-line" />
                   </div>
-                  <p>
-                    Planting native saplings in high-density Miyawaki clusters along creek edges and railway buffers with automated solar drip irrigation and soil moisture telemetry.
-                  </p>
-                  <div className="ip-phase-actions">
-                    <span>✓ Soil enrichment with biochar & coco-peat substrate</span>
-                    <span>✓ Plant multi-tier native species (Neem, Banyan, Jamun, Peepal)</span>
-                    <span>✓ Install vertical green ivy trellises on flyover pillars</span>
+                  <div className="ip-phase-body">
+                    <div className="ip-phase-header">
+                      <span className="ip-phase-tag">DAY 46 – DAY 180</span>
+                      <h3>Phase 2: Blue-Green Talao Restoration & Porous Walkways</h3>
+                      <span className="ip-phase-drop">-{(targetReduction * 0.60).toFixed(1)}°C Cumulative Relief</span>
+                    </div>
+                    <p>
+                      Desilting of retention ponds and installation of solar-powered aeration fountains. Replacement of heat-trapping asphalt with permeable cool paving.
+                    </p>
+                    <div className="ip-phase-actions">
+                      <span>✓ Excavate & desilt retention pond bed in {selectedLocation.ward}</span>
+                      <span>✓ Commission floating solar microclimate aeration fountains</span>
+                      <span>✓ Lay interlocking porous concrete pavers along transit corridors</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Phase 4 */}
-              <div className="ip-phase-card">
-                <div className="ip-phase-marker">
-                  <div className="ip-marker-circle last">4</div>
-                </div>
-                <div className="ip-phase-body">
-                  <div className="ip-phase-header">
-                    <span className="ip-phase-tag">YEAR 3 – YEAR 5</span>
-                    <h3>Phase 4: Permanent Microclimate Buffer & Thermal Resilience</h3>
-                    <span className="ip-phase-drop" style={{ background: '#dcfce7', color: '#15803d' }}>
-                      -{targetReduction.toFixed(1)}°C Target Fully Achieved ({targetGoalTemp}°C)
-                    </span>
+                {/* Phase 3 */}
+                <div className="ip-phase-card">
+                  <div className="ip-phase-marker">
+                    <div className="ip-marker-circle">3</div>
+                    <div className="ip-marker-line" />
                   </div>
-                  <p>
-                    Full canopy maturation creates continuous shaded green corridors across {selectedLocation.name}. Complete urban heat island reduction achieved with permanent thermal protection.
-                  </p>
-                  <div className="ip-phase-actions">
-                    <span>✓ Canopy overlap reaches 65% street shading threshold</span>
-                    <span>✓ Permanent microclimate cooling buffer verified via IoT telemetry</span>
-                    <span>✓ Long-term municipal maintenance handed over with automated sensors</span>
+                  <div className="ip-phase-body">
+                    <div className="ip-phase-header">
+                      <span className="ip-phase-tag">YEAR 1 – YEAR 2</span>
+                      <h3>Phase 3: Miyawaki Micro-Forest Canopy & Vertical Walls</h3>
+                      <span className="ip-phase-drop">-{(targetReduction * 0.85).toFixed(1)}°C Cumulative Relief</span>
+                    </div>
+                    <p>
+                      Planting native saplings in high-density Miyawaki clusters along creek edges and railway buffers with automated solar drip irrigation and soil moisture telemetry.
+                    </p>
+                    <div className="ip-phase-actions">
+                      <span>✓ Soil enrichment with biochar & coco-peat substrate</span>
+                      <span>✓ Plant multi-tier native species (Neem, Banyan, Jamun, Peepal)</span>
+                      <span>✓ Install vertical green ivy trellises on flyover pillars</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phase 4 */}
+                <div className="ip-phase-card">
+                  <div className="ip-phase-marker">
+                    <div className="ip-marker-circle last">4</div>
+                  </div>
+                  <div className="ip-phase-body">
+                    <div className="ip-phase-header">
+                      <span className="ip-phase-tag">YEAR 3 – YEAR 5</span>
+                      <h3>Phase 4: Permanent Microclimate Buffer & Thermal Resilience</h3>
+                      <span className="ip-phase-drop" style={{ background: '#dcfce7', color: '#15803d' }}>
+                        -{targetReduction.toFixed(1)}°C Target Fully Achieved ({targetGoalTemp}°C)
+                      </span>
+                    </div>
+                    <p>
+                      Full canopy maturation creates continuous shaded green corridors across {selectedLocation.name}. Complete urban heat island reduction achieved with permanent thermal protection.
+                    </p>
+                    <div className="ip-phase-actions">
+                      <span>✓ Canopy overlap reaches 65% street shading threshold</span>
+                      <span>✓ Permanent microclimate cooling buffer verified via IoT telemetry</span>
+                      <span>✓ Long-term municipal maintenance handed over with automated sensors</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
@@ -3315,20 +3400,20 @@ function ModelPage({
   }, [latestRec, selectedLocation.id])
 
   const pinnPred = liveInference?.pinnPredictedLST ?? +(weather.temp + 0.1).toFixed(1)
-  const rfPred   = liveInference?.rfPredictedLST ?? +(weather.temp + 1.8).toFixed(1)
-  const actual   = latestRec?.actualLST ?? weather.surfaceTemp
+  const rfPred = liveInference?.rfPredictedLST ?? +(weather.temp + 1.8).toFixed(1)
+  const actual = latestRec?.actualLST ?? weather.surfaceTemp
 
   // Real benchmark rows from PINN_BENCHMARK dataset
   const benchmarkRows = [
-    { metric: 'MAE (°C)',              pinn: pinnBench.mae.toFixed(3), rf: rfBench.mae.toFixed(3), unit: '°C', lower: true,  pinnWins: pinnBench.mae <= rfBench.mae },
-    { metric: 'RMSE (°C)',             pinn: pinnBench.rmse.toFixed(3), rf: rfBench.rmse.toFixed(3), unit: '°C', lower: true, pinnWins: pinnBench.rmse <= rfBench.rmse },
-    { metric: 'R² Score',              pinn: pinnBench.r2.toFixed(4), rf: rfBench.r2.toFixed(4), unit: '', lower: false, pinnWins: pinnBench.r2 >= rfBench.r2 },
-    { metric: 'Max Error (°C)',        pinn: pinnBench.maxError.toFixed(2), rf: rfBench.maxError.toFixed(2), unit: '°C', lower: true, pinnWins: pinnBench.maxError <= rfBench.maxError },
-    { metric: 'Heatwave Peak Acc.',    pinn: pinnBench.heatwaveAccuracy, rf: rfBench.heatwaveAccuracy, unit: '', lower: false, pinnWins: true },
-    { metric: 'Physical Consistency',  pinn: pinnBench.physicsConsistency, rf: rfBench.physicsConsistency, unit: '', lower: false, pinnWins: true },
+    { metric: 'MAE (°C)', pinn: pinnBench.mae.toFixed(3), rf: rfBench.mae.toFixed(3), unit: '°C', lower: true, pinnWins: pinnBench.mae <= rfBench.mae },
+    { metric: 'RMSE (°C)', pinn: pinnBench.rmse.toFixed(3), rf: rfBench.rmse.toFixed(3), unit: '°C', lower: true, pinnWins: pinnBench.rmse <= rfBench.rmse },
+    { metric: 'R² Score', pinn: pinnBench.r2.toFixed(4), rf: rfBench.r2.toFixed(4), unit: '', lower: false, pinnWins: pinnBench.r2 >= rfBench.r2 },
+    { metric: 'Max Error (°C)', pinn: pinnBench.maxError.toFixed(2), rf: rfBench.maxError.toFixed(2), unit: '°C', lower: true, pinnWins: pinnBench.maxError <= rfBench.maxError },
+    { metric: 'Heatwave Peak Acc.', pinn: pinnBench.heatwaveAccuracy, rf: rfBench.heatwaveAccuracy, unit: '', lower: false, pinnWins: true },
+    { metric: 'Physical Consistency', pinn: pinnBench.physicsConsistency, rf: rfBench.physicsConsistency, unit: '', lower: false, pinnWins: true },
     { metric: 'Extrapolation Ability', pinn: '✓ Strong (PDEs)', rf: '✗ Weak (Statistical)', unit: '', lower: false, pinnWins: true },
-    { metric: 'Training Samples',      pinn: modelMeta.trainingSamples.toLocaleString(), rf: '48,000+', unit: '', lower: true, pinnWins: true },
-    { metric: 'Inference Latency',     pinn: `${pinnBench.inferenceLatencyMs} ms`, rf: `${rfBench.inferenceLatencyMs} ms`, unit: '', lower: true, pinnWins: pinnBench.inferenceLatencyMs <= rfBench.inferenceLatencyMs },
+    { metric: 'Training Samples', pinn: modelMeta.trainingSamples.toLocaleString(), rf: '48,000+', unit: '', lower: true, pinnWins: true },
+    { metric: 'Inference Latency', pinn: `${pinnBench.inferenceLatencyMs} ms`, rf: `${rfBench.inferenceLatencyMs} ms`, unit: '', lower: true, pinnWins: pinnBench.inferenceLatencyMs <= rfBench.inferenceLatencyMs },
     { metric: 'Total Dataset Records', pinn: modelMeta.totalRecords.toLocaleString(), rf: '—', unit: '', lower: false, pinnWins: true },
   ]
 
@@ -3567,7 +3652,7 @@ function ModelPage({
               <tbody>
                 {benchmarkRows.map((r) => {
                   const pinnNum = parseFloat(r.pinn)
-                  const rfNum   = parseFloat(r.rf)
+                  const rfNum = parseFloat(r.rf)
                   const improvePct = (!isNaN(pinnNum) && !isNaN(rfNum) && rfNum !== 0)
                     ? r.lower
                       ? (((rfNum - pinnNum) / rfNum) * 100).toFixed(0) + '% better'
@@ -4437,10 +4522,10 @@ function ArchitecturePage({
                   viewMode === 'isometric'
                     ? 'perspective(1300px) rotateX(54deg) rotateZ(-30deg) rotateY(2deg)'
                     : viewMode === 'exploded'
-                    ? 'perspective(1500px) rotateX(46deg) rotateZ(-22deg) scale(0.92)'
-                    : viewMode === 'front'
-                    ? 'perspective(1000px) rotateX(0deg) rotateZ(0deg) rotateY(0deg)'
-                    : 'perspective(1300px) rotateX(58deg) rotateZ(-38deg) scale(0.95)',
+                      ? 'perspective(1500px) rotateX(46deg) rotateZ(-22deg) scale(0.92)'
+                      : viewMode === 'front'
+                        ? 'perspective(1000px) rotateX(0deg) rotateZ(0deg) rotateY(0deg)'
+                        : 'perspective(1300px) rotateX(58deg) rotateZ(-38deg) scale(0.95)',
               }}
             >
               {/* Central vertical laser conduit */}
@@ -4829,7 +4914,7 @@ function GenericPage({
   selectedLocation: ThaneLocation
   onSelectLocation: (loc: ThaneLocation) => void
 }) {
-  const title = name === '48h Forecast' ? '48-hour forecast' : name
+  const title = name
 
   return (
     <div className="generic">
@@ -4918,7 +5003,7 @@ export default function Page() {
 
   const content = active === 'Analytics'
     ? (
-      <Analytics
+      <AnalyticsPage
         time={indiaTime}
         weather={liveWeather}
         selectedLocation={selectedLocation}
@@ -4926,59 +5011,68 @@ export default function Page() {
       />
     )
     : active === 'Historical'
-    ? (
-      <HistoricalPage
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        time={indiaTime}
-        weather={liveWeather}
-      />
-    )
-    : active === 'Heat Map'
-    ? (
-      <HeatMapPage
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        time={indiaTime}
-        weather={liveWeather}
-      />
-    )
-    : active === 'Intervention Plan'
-    ? (
-      <InterventionPlanPage
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        time={indiaTime}
-        weather={liveWeather}
-      />
-    )
-    : active === 'Model'
-    ? (
-      <ModelPage
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        time={indiaTime}
-        weather={liveWeather}
-      />
-    )
-    : active === 'Architecture'
-    ? (
-      <ArchitecturePage
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-        time={indiaTime}
-        weather={liveWeather}
-      />
-    )
-    : (
-      <GenericPage
-        name={active}
-        weather={liveWeather}
-        time={indiaTime}
-        selectedLocation={selectedLocation}
-        onSelectLocation={setSelectedLocation}
-      />
-    )
+      ? (
+        <HistoricalPage
+          selectedLocation={selectedLocation}
+          onSelectLocation={setSelectedLocation}
+          time={indiaTime}
+          weather={liveWeather}
+        />
+      )
+      : active === 'Heat Map'
+        ? (
+          <HeatMapPage
+            selectedLocation={selectedLocation}
+            onSelectLocation={setSelectedLocation}
+            time={indiaTime}
+            weather={liveWeather}
+          />
+        )
+        : active === 'Risk Stratification'
+          ? (
+            <RiskStratificationPage
+              selectedLocation={selectedLocation}
+              onSelectLocation={setSelectedLocation}
+              time={indiaTime}
+              weather={liveWeather}
+            />
+          )
+          : active === 'Intervention Plan'
+            ? (
+              <InterventionPlanPage
+                selectedLocation={selectedLocation}
+                onSelectLocation={setSelectedLocation}
+                time={indiaTime}
+                weather={liveWeather}
+              />
+            )
+            : active === 'Model'
+              ? (
+                <ModelPage
+                  selectedLocation={selectedLocation}
+                  onSelectLocation={setSelectedLocation}
+                  time={indiaTime}
+                  weather={liveWeather}
+                />
+              )
+              : active === 'Architecture'
+                ? (
+                  <ArchitecturePage
+                    selectedLocation={selectedLocation}
+                    onSelectLocation={setSelectedLocation}
+                    time={indiaTime}
+                    weather={liveWeather}
+                  />
+                )
+                : (
+                  <GenericPage
+                    name={active}
+                    weather={liveWeather}
+                    time={indiaTime}
+                    selectedLocation={selectedLocation}
+                    onSelectLocation={setSelectedLocation}
+                  />
+                )
 
   return (
     <div className="app-shell">
@@ -5035,4 +5129,3 @@ export function useHeatCalculations(weather: { temperature?: number; surfaceTemp
     heatHealthIndex: 74,
   }), [weather])
 }
-
