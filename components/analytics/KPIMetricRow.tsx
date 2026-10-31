@@ -49,8 +49,8 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       value: weather.temp.toFixed(1),
       unit: '°C',
       change: `feels ${weather.feelsLike}°C`,
-      borderAccent: 'border-l-[#EA580C]',
-      barColor: '#EA580C',
+      borderAccent: 'border-l-[#D5360C]',
+      barColor: '#D5360C',
       sparkline: weather.chartTemp?.slice(0, 8) || [32, 33, 35, 36, 37, 36, 34, weather.temp],
       tagLeft: 'telemetry sync',
       tagRight: '24h dynamic curve',
@@ -62,8 +62,8 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       value: weather.surfaceTemp.toFixed(1),
       unit: '°C',
       change: location.lstOffset >= 0 ? `+${location.lstOffset}°C offset` : `${location.lstOffset}°C buffer`,
-      borderAccent: 'border-l-[#DC2626]',
-      barColor: '#DC2626',
+      borderAccent: 'border-l-[#D5360C]',
+      barColor: '#D5360C',
       sparkline: [37 + location.lstOffset, 38.5 + location.lstOffset, 40 + location.lstOffset, 41.5 + location.lstOffset, 42.8 + location.lstOffset, 41 + location.lstOffset, 39 + location.lstOffset, weather.surfaceTemp],
       tagLeft: weather.surfaceTemp >= 40 ? 'CRITICAL THERMAL' : 'MONITORED LEVEL',
       tagRight: 'satellite LST',
@@ -75,8 +75,8 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       value: String(weather.aqi),
       unit: ' AQI',
       change: weather.aqi > 100 ? 'Moderate (CPCB)' : 'Satisfactory (CPCB)',
-      borderAccent: 'border-l-[#D97706]',
-      barColor: '#D97706',
+      borderAccent: 'border-l-[#D5360C]',
+      barColor: '#D5360C',
       sparkline: weather.chartAqi?.slice(0, 8) || [140, 150, 158, 164, 160, 155, 150, weather.aqi],
       tagLeft: 'telemetry sync',
       tagRight: 'continuous 24h',
@@ -88,8 +88,8 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       value: String(weather.humidity),
       unit: '%',
       change: `${weather.precipitation} mm rain`,
-      borderAccent: 'border-l-[#2563EB]',
-      barColor: '#2563EB',
+      borderAccent: 'border-l-[#D5360C]',
+      barColor: '#D5360C',
       sparkline: [62, 65, 68, 71, 74, 76, 73, weather.humidity],
       tagLeft: `${weather.precipitation} mm precipitation`,
       tagRight: 'hygrometer feed',
@@ -101,8 +101,8 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       value: weather.hotspotsCount < 10 ? `0${weather.hotspotsCount}` : String(weather.hotspotsCount),
       unit: ' clusters',
       change: location.vulnerability === 'High' ? 'High vulnerability' : 'Normal range',
-      borderAccent: 'border-l-[#DC2626]',
-      barColor: '#DC2626',
+      borderAccent: 'border-l-[#D5360C]',
+      barColor: '#D5360C',
       sparkline: [2, 3, 4, 5, 6, 5, 4, weather.hotspotsCount],
       tagLeft: `${location.zoneNumber} active`,
       tagRight: 'spatial clustering',
@@ -127,14 +127,14 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
       {cards.map((card) => (
         <div
           key={card.id}
-          className={`bg-white rounded-[12px] p-4 shadow-sm border border-[#E8E2D8] border-l-4 ${card.borderAccent} flex flex-col justify-between min-h-[160px] transition-all hover:shadow-md`}
+          className={`bg-[var(--color-surface)] rounded-[12px] p-4 shadow-sm border border-[rgba(16,16,16,0.15)] border-l-4 ${card.borderAccent} flex flex-col justify-between min-h-[160px] transition-all hover:shadow-md`}
         >
           {/* TOP: Metric Name (small caps) + Context Label */}
           <div className="flex items-start justify-between gap-1 mb-1">
-            <span className="text-[10px] uppercase font-bold text-[#6B7280] tracking-wider truncate">
+            <span className="text-[10px] uppercase font-bold text-[rgba(16,16,16,0.65)] tracking-wider truncate">
               {card.title}
             </span>
-            <span className="text-[10px] text-[#9CA3AF] font-medium shrink-0">
+            <span className="text-[10px] text-[rgba(16,16,16,0.65)] font-medium shrink-0">
               {card.context}
             </span>
           </div>
@@ -142,14 +142,14 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
           {/* MIDDLE: Large Value Number + Unit & Sub-status */}
           <div className="my-1">
             <div className="flex items-baseline gap-1">
-              <span className="text-2xl sm:text-[28px] font-black text-[#1A1A1A] tracking-tight leading-none">
+              <span className="text-2xl sm:text-[28px] font-black text-[#101010] tracking-tight leading-none">
                 {card.value}
               </span>
-              <span className="text-xs font-bold text-[#6B7280]">
+              <span className="text-xs font-bold text-[rgba(16,16,16,0.65)]">
                 {card.unit}
               </span>
             </div>
-            <p className="text-[11px] font-semibold text-[#4B5563] mt-1 truncate">
+            <p className="text-[11px] font-semibold text-[rgba(16,16,16,0.65)] mt-1 truncate">
               {card.change}
             </p>
           </div>
@@ -160,7 +160,7 @@ export default function KPIMetricRow({ location, weather }: KPIMetricRowProps) {
           </div>
 
           {/* VERY BOTTOM: Metadata tags */}
-          <div className="flex items-center justify-between text-[9px] font-mono text-[#9CA3AF] pt-1.5 border-t border-[#F0EBE1]">
+          <div className="flex items-center justify-between text-[9px] font-mono text-[rgba(16,16,16,0.65)] pt-1.5 border-t border-[rgba(16,16,16,0.15)]">
             <span className="truncate">{card.tagLeft}</span>
             <span className="shrink-0">{card.tagRight}</span>
           </div>

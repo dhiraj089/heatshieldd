@@ -118,7 +118,7 @@ export default function TelemetryPipeline({
           <button
             type="button"
             onClick={onRefresh}
-            className="flex items-center gap-1.5 bg-[#EA580C] hover:bg-[#C2410C] text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 bg-[#D5360C] hover:bg-[#B82D09] text-white px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95"
             title="Force immediate telemetry resync"
           >
             <RefreshCw size={13} className={weather.isLoading ? 'animate-spin' : ''} />
@@ -142,7 +142,7 @@ export default function TelemetryPipeline({
             >
               {/* Step Header */}
               <div className="flex items-center justify-between gap-2 mb-2.5">
-                <span className="font-mono text-sm font-extrabold text-[#EA580C]">
+                <span className="font-mono text-sm font-extrabold text-[#D5360C]">
                   {step.num}
                 </span>
                 <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
@@ -171,7 +171,7 @@ export default function TelemetryPipeline({
                 <span className="text-[10px] text-[#64748B] uppercase font-semibold">
                   {isPending ? 'Queued' : 'Live Pipe'}
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#EA580C]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#D5360C]" />
               </div>
             </div>
           )

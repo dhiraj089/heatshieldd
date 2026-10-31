@@ -137,18 +137,18 @@ export default function WardCardGrid({
   }, [stationNodes, searchQuery, filterType])
 
   return (
-    <div className="bg-white rounded-[12px] p-5 shadow-sm border border-[#E8E2D8] mb-6 transition-all">
+    <div className="bg-[var(--color-surface)] rounded-[12px] p-5 shadow-sm border border-[rgba(16,16,16,0.15)] mb-6 transition-all">
       {/* Header & Search / Filter Controls */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#F0EBE1] mb-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[rgba(16,16,16,0.15)] mb-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-center shrink-0">
-            <MapPin size={20} className="text-[#EA580C]" />
+          <div className="w-10 h-10 rounded-lg bg-[var(--color-bg-soft)] border border-[rgba(16,16,16,0.15)] flex items-center justify-center shrink-0">
+            <MapPin size={20} className="text-[#D5360C]" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-[#1A1A1A] tracking-tight">
+            <h3 className="text-lg font-bold text-[#101010] tracking-tight">
               Thane City Monitoring Network ({locations.length} Locations)
             </h3>
-            <p className="text-xs text-[#6B7280]">
+            <p className="text-xs text-[rgba(16,16,16,0.65)]">
               18 Calibrated Telemetry Zones across Thane · Click any location for real-time dashboard sync
             </p>
           </div>
@@ -157,18 +157,18 @@ export default function WardCardGrid({
         <div className="flex flex-wrap items-center gap-3">
           {/* Search Box */}
           <div className="relative flex items-center min-w-[240px] sm:min-w-[280px]">
-            <Search size={14} className="absolute left-3 text-[#9CA3AF]" />
+            <Search size={14} className="absolute left-3 text-[rgba(16,16,16,0.65)]" />
             <input
               type="text"
               placeholder="Search location, ward, landmark..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 py-1.5 text-xs bg-[#FBF9F5] border border-[#E5E0D8] rounded-full focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] text-[#1A1A1A] placeholder-[#9CA3AF] transition-all"
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-[#FBF9F5] border border-[#E5E0D8] rounded-full focus:outline-none focus:border-[#D5360C] focus:ring-1 focus:ring-[#D5360C] text-[#101010] placeholder-[rgba(16,16,16,0.65)] transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 text-[#9CA3AF] hover:text-[#1A1A1A] p-0.5"
+                className="absolute right-3 text-[rgba(16,16,16,0.65)] hover:text-[#101010] p-0.5"
                 aria-label="Clear search"
               >
                 <X size={12} />
@@ -177,13 +177,13 @@ export default function WardCardGrid({
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center bg-[#F5F0E8] p-1 rounded-full border border-[#E8E2D8] text-xs font-medium">
+          <div className="flex items-center bg-[#F5F0E8] p-1 rounded-full border border-[rgba(16,16,16,0.15)] text-xs font-medium">
             <button
               onClick={() => setFilterType('all')}
               className={`px-3 py-1 rounded-full transition-all ${
                 filterType === 'all'
-                  ? 'bg-white text-[#1A1A1A] shadow-xs font-semibold'
-                  : 'text-[#6B7280] hover:text-[#1A1A1A]'
+                  ? 'bg-[var(--color-surface)] text-[#101010] shadow-xs font-semibold'
+                  : 'text-[rgba(16,16,16,0.65)] hover:text-[#101010]'
               }`}
             >
               All ({totalCount})
@@ -192,8 +192,8 @@ export default function WardCardGrid({
               onClick={() => setFilterType('high')}
               className={`px-3 py-1 rounded-full transition-all ${
                 filterType === 'high'
-                  ? 'bg-[#DC2626] text-white shadow-xs font-semibold'
-                  : 'text-[#DC2626] hover:bg-[#FEE2E2]'
+                  ? 'bg-[#D5360C] text-white shadow-xs font-semibold'
+                  : 'text-[#D5360C] hover:bg-[var(--color-bg-soft)]'
               }`}
             >
               High Risk ({highCount})
@@ -202,8 +202,8 @@ export default function WardCardGrid({
               onClick={() => setFilterType('moderate')}
               className={`px-3 py-1 rounded-full transition-all ${
                 filterType === 'moderate'
-                  ? 'bg-[#EA580C] text-white shadow-xs font-semibold'
-                  : 'text-[#EA580C] hover:bg-[#FFEDD5]'
+                  ? 'bg-[#D5360C] text-white shadow-xs font-semibold'
+                  : 'text-[#D5360C] hover:bg-[rgba(213,54,12,0.15)]'
               }`}
             >
               Moderate ({modCount})
@@ -230,23 +230,23 @@ export default function WardCardGrid({
           // Real-time telemetry status styling (Critical: red, Watch: amber, Safe: green)
           const statusDotBg =
             telemetry.status === 'Critical'
-              ? 'bg-[#DC2626]'
+              ? 'bg-[#D5360C]'
               : telemetry.status === 'Watch'
-              ? 'bg-[#EA580C]'
+              ? 'bg-[#D5360C]'
               : 'bg-[#16A34A]'
 
           const badgeBg =
             telemetry.vulnerability === 'High'
-              ? 'bg-[#DC2626] text-white'
+              ? 'bg-[#D5360C] text-white'
               : telemetry.vulnerability === 'Moderate'
-              ? 'bg-[#EA580C] text-white'
+              ? 'bg-[#D5360C] text-white'
               : 'bg-[#16A34A] text-white'
 
           const lstColor =
             telemetry.lst >= 42
-              ? 'text-[#DC2626]'
+              ? 'text-[#D5360C]'
               : telemetry.lst >= 40
-              ? 'text-[#EA580C]'
+              ? 'text-[#D5360C]'
               : 'text-[#16A34A]'
 
           return (
@@ -256,8 +256,8 @@ export default function WardCardGrid({
               onClick={() => onSelectLocation(node.rawLocation)}
               className={`relative flex flex-col justify-between text-left p-3 min-h-[96px] rounded-[10px] transition-all border ${
                 isSelected
-                  ? 'border-[#EA580C] bg-[#FFFBF7] ring-2 ring-[#EA580C]/25 shadow-md -translate-y-0.5'
-                  : 'border-[#EBE6DC] bg-[#FAF8F5] hover:bg-white hover:border-[#D8D2C6] hover:shadow-sm hover:-translate-y-0.5'
+                  ? 'border-[#D5360C] bg-[#FFFBF7] ring-2 ring-[#D5360C]/25 shadow-md -translate-y-0.5'
+                  : 'border-[#EBE6DC] bg-[#FAF8F5] hover:bg-[var(--color-surface)] hover:border-[#D8D2C6] hover:shadow-sm hover:-translate-y-0.5'
               }`}
             >
               {/* TOP ROW: Ward No & Live Telemetry Pulse + Risk Badge */}
@@ -269,7 +269,7 @@ export default function WardCardGrid({
                     />
                     <span className={`relative inline-flex rounded-full h-2 w-2 ${statusDotBg}`} />
                   </span>
-                  <span className="text-[10px] font-semibold text-[#6B7280] tracking-wide uppercase truncate">
+                  <span className="text-[10px] font-semibold text-[rgba(16,16,16,0.65)] tracking-wide uppercase truncate">
                     {node.wardNumber}
                   </span>
                 </div>
@@ -281,7 +281,7 @@ export default function WardCardGrid({
               </div>
 
               {/* MIDDLE: Ward Name */}
-              <div className="text-sm font-bold text-[#1A1A1A] truncate w-full mb-1" title={node.name}>
+              <div className="text-sm font-bold text-[#101010] truncate w-full mb-1" title={node.name}>
                 {node.name}
               </div>
 
@@ -290,7 +290,7 @@ export default function WardCardGrid({
                 <strong className={`font-bold font-mono ${lstColor}`}>
                   {telemetry.lst}°C LST
                 </strong>
-                <span className="text-[10px] text-[#9CA3AF] font-mono">
+                <span className="text-[10px] text-[rgba(16,16,16,0.65)] font-mono">
                   {geospatial.formattedLat}
                 </span>
               </div>

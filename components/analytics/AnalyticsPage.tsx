@@ -39,28 +39,28 @@ export default function AnalyticsPage({
       {/* ═══════════════════════════════════════════════════════════════
           1. PAGE HEADER SECTION
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="bg-white rounded-[12px] p-6 shadow-sm border border-[#E8E2D8] flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all">
+      <div className="bg-[var(--color-surface)] rounded-[12px] p-6 shadow-sm border border-[rgba(16,16,16,0.15)] flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all">
         <div>
           {/* Breadcrumb & Date */}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280] mb-1.5 font-medium">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[rgba(16,16,16,0.65)] mb-1.5 font-medium">
             <span>Eco Portal</span>
             <span>/</span>
             <span>Analytics</span>
             <span>/</span>
-            <strong className="text-[#EA580C] font-semibold">{selectedLocation.name}</strong>
+            <strong className="text-[#D5360C] font-semibold">{selectedLocation.name}</strong>
             <span className="hidden sm:inline">·</span>
-            <span className="hidden sm:inline font-mono text-[#9CA3AF]" suppressHydrationWarning>
+            <span className="hidden sm:inline font-mono text-[rgba(16,16,16,0.65)]" suppressHydrationWarning>
               {time.formatted}
             </span>
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl sm:text-3xl font-black text-[#1A1A1A] tracking-tight">
-            {selectedLocation.name} Telemetry<span className="text-[#EA580C]">.</span>
+          <h1 className="text-2xl sm:text-3xl font-black text-[#101010] tracking-tight">
+            {selectedLocation.name} Telemetry<span className="text-[#D5360C]">.</span>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-xs sm:text-sm text-[#6B7280] mt-1 max-w-3xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-[rgba(16,16,16,0.65)] mt-1 max-w-3xl leading-relaxed">
             Real-time microclimate intelligence for {selectedLocation.name} ({selectedLocation.ward}) · Live Open-Meteo & Air Quality streams.
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function AnalyticsPage({
           <button
             type="button"
             onClick={weather.refresh}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFF7ED] hover:bg-[#FFEDD5] border border-[#FED7AA] text-xs font-bold text-[#EA580C] shadow-xs transition-all active:scale-95"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-bg-soft)] hover:bg-[rgba(213,54,12,0.15)] border border-[rgba(16,16,16,0.15)] text-xs font-bold text-[#D5360C] shadow-xs transition-all active:scale-95"
             title="Refresh live telemetry streams for selected ward"
           >
             <span className="relative flex h-2 w-2">

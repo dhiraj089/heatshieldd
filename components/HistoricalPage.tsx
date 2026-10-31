@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ArrowDownRight,
@@ -56,8 +56,16 @@ export default function HistoricalPage({
   const [selectedMonth, setSelectedMonth] = useState<number>(5)
   const [archiveMonth, setArchiveMonth] = useState<number | 'all'>('all')
   const [selectedWard, setSelectedWard] = useState<string>(selectedLocation.zoneNumber)
+  const [showAllPills, setShowAllPills] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRiskFilter, setSelectedRiskFilter] = useState<'ALL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL')
+
+  // Keep selectedWard in sync if selectedLocation updates from parent
+  useEffect(() => {
+    if (selectedLocation?.zoneNumber) {
+      setSelectedWard(selectedLocation.zoneNumber)
+    }
+  }, [selectedLocation?.zoneNumber])
 
   // Find active location based on ward
   const activeLoc = useMemo(() => {
@@ -155,7 +163,7 @@ export default function HistoricalPage({
             className="date-btn"
             onClick={handleDownloadCSV}
             title="Download CSV for this ward"
-            style={{ background: '#16a34a', color: '#2a2824', borderColor: '#16a34a' }}
+            style={{ background: '#16a34a', color: '#101010', borderColor: '#16a34a' }}
           >
             <Download size={14} />
             <span>Export CSV Dataset</span>
@@ -163,29 +171,78 @@ export default function HistoricalPage({
         </div>
       </div>
 
-      {/* Ward Selector Strip */}
+      {/* Ward Location Selector: Dropdown & Quick Chips */}
       <div className="hist-location-strip" style={{ marginBottom: 20 }}>
-        {THANE_LOCATIONS.map(loc => {
-          const isSelected = loc.zoneNumber === selectedWard
-          return (
+        <div className="hist-selector-header">
+          <div className="hist-selector-left">
+            <MapPin size={18} className="hist-pin-icon" />
+            <label htmlFor="hist-ward-dropdown" className="hist-selector-label">
+              SELECT WARD LOCATION:
+            </label>
+            <div className="hist-dropdown-wrapper">
+              <select
+                id="hist-ward-dropdown"
+                value={activeLoc.id}
+                onChange={e => {
+                  const loc = THANE_LOCATIONS.find(l => l.id === e.target.value)
+                  if (loc) {
+                    setSelectedWard(loc.zoneNumber)
+                    if (onSelectLocation) onSelectLocation(loc)
+                  }
+                }}
+                className="hist-dropdown-select"
+                aria-label="Select Thane Ward Location"
+              >
+                {THANE_LOCATIONS.map(loc => (
+                  <option key={loc.id} value={loc.id}>
+                    {loc.zoneNumber} · {loc.name} ({loc.vulnerability} Heat Risk · {loc.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="hist-selector-right">
+            <span className="hist-active-tag">
+              Selected: <strong>{activeLoc.name}</strong> ({activeLoc.zoneNumber})
+            </span>
             <button
-              key={loc.id}
               type="button"
-              className={`hist-loc-chip ${isSelected ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedWard(loc.zoneNumber)
-                if (onSelectLocation) onSelectLocation(loc)
-              }}
+              onClick={() => setShowAllPills(!showAllPills)}
+              className="hist-toggle-chips-btn"
+              title="Toggle all 18 ward chips"
             >
-              <span
-                className={`zone-dot ${
-                  loc.vulnerability === 'High' ? 'critical' : loc.vulnerability === 'Low' ? 'safe' : 'watch'
-                }`}
-              />
-              <span style={{ fontWeight: 600 }}>{loc.zoneNumber}</span> · {loc.name}
+              <span>{showAllPills ? 'Hide Quick Chips' : 'All 18 Ward Chips'}</span>
+              <ChevronDown size={14} className={showAllPills ? 'rotate-180' : ''} />
             </button>
-          )
-        })}
+          </div>
+        </div>
+
+        {showAllPills && (
+          <div className="hist-chips-grid">
+            {THANE_LOCATIONS.map(loc => {
+              const isSelected = loc.zoneNumber === selectedWard
+              return (
+                <button
+                  key={loc.id}
+                  type="button"
+                  className={`hist-loc-chip ${isSelected ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedWard(loc.zoneNumber)
+                    if (onSelectLocation) onSelectLocation(loc)
+                  }}
+                >
+                  <span
+                    className={`zone-dot ${
+                      loc.vulnerability === 'High' ? 'critical' : loc.vulnerability === 'Low' ? 'safe' : 'watch'
+                    }`}
+                  />
+                  <span style={{ fontWeight: 600 }}>{loc.zoneNumber}</span> · {loc.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* 3 Key Summary Metric Cards */}
@@ -229,9 +286,9 @@ export default function HistoricalPage({
       {/* ── TAB 3: SEASONAL PROFILE ── */}
       {activeTab === 'seasonal' && (
         <div className="hist-section">
-          <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
-            <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>12-Month Diurnal & Seasonal Energy Cycle · {activeLoc.name}</h2>
-            <p style={{ margin: '6px 0 20px', fontSize: 13, color: '#77736b' }}>
+          <div className="panel" style={{ background: '#F4EADA', padding: 24, borderRadius: 12, border: '1px solid rgba(16,16,16,0.15)' }}>
+            <h2 style={{ fontSize: 18, margin: 0, color: '#101010' }}>12-Month Diurnal & Seasonal Energy Cycle · {activeLoc.name}</h2>
+            <p style={{ margin: '6px 0 20px', fontSize: 13, color: 'rgba(16,16,16,0.65)' }}>
               Aggregated across 10 years of observation. Illustrates pre-monsoon heat peak (Apr–May), monsoon maritime cooling (Jun–Sep), and post-monsoon warming.
             </p>
 
@@ -240,23 +297,23 @@ export default function HistoricalPage({
                 <div
                   key={sp.month}
                   style={{
-                    background: '#fbf9f4',
-                    border: '1px solid #e8e2d8',
+                    background: '#F4EADA',
+                    border: '1px solid rgba(16,16,16,0.15)',
                     borderRadius: 10,
                     padding: 14
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#2a2824' }}>{sp.monthName}</span>
-                    <span style={{ fontSize: 11, color: '#9b968d' }}>M{sp.month}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#101010' }}>{sp.monthName}</span>
+                    <span style={{ fontSize: 11, color: 'rgba(16,16,16,0.65)' }}>M{sp.month}</span>
                   </div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: sp.avgLST >= 36 ? '#ef4444' : sp.avgLST >= 32 ? '#f97316' : '#60a5fa' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: sp.avgLST >= 36 ? '#D5360C' : sp.avgLST >= 32 ? '#D5360C' : '#D5360C' }}>
                     {sp.avgLST}°C
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 11, color: '#77736b', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(16,16,16,0.65)', display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span>NDVI: <b style={{ color: '#22c55e' }}>{sp.avgNDVI}</b></span>
-                    <span>NDBI: <b style={{ color: '#cbd5e1' }}>{sp.avgNDBI}</b></span>
-                    <span>Albedo: <b style={{ color: '#93c5fd' }}>{sp.avgAlbedo}</b></span>
+                    <span>NDBI: <b style={{ color: 'rgba(16,16,16,0.2)' }}>{sp.avgNDBI}</b></span>
+                    <span>Albedo: <b style={{ color: '#EDA389' }}>{sp.avgAlbedo}</b></span>
                   </div>
                 </div>
               ))}
@@ -268,11 +325,11 @@ export default function HistoricalPage({
       {/* ── TAB 4: TABLE ── */}
       {activeTab === 'table' && (
         <div className="hist-section">
-          <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
+          <div className="panel" style={{ background: '#F4EADA', padding: 24, borderRadius: 12, border: '1px solid rgba(16,16,16,0.15)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
               <div>
-                <h2 style={{ fontSize: 18, margin: 0, color: '#2a2824' }}>Full Multi-Spectral Dataset Archive</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: '#77736b' }}>
+                <h2 style={{ fontSize: 18, margin: 0, color: '#101010' }}>Full Multi-Spectral Dataset Archive</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(16,16,16,0.65)' }}>
                   Showing {archiveRecords.length} of {zoneRecords.length} records for <strong>{activeLoc.name} ({selectedWard})</strong> · {activeArchiveMonth === 'all' ? 'All months' : HIST_MONTH_NAMES[activeArchiveMonth - 1]} {selectedYear}.
                 </p>
               </div>
@@ -280,7 +337,7 @@ export default function HistoricalPage({
               {/* Archive Filters */}
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#88837a', fontWeight: 600 }}>YEAR:</span>
+                  <span style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)', fontWeight: 600 }}>YEAR:</span>
                 <select
                   value={selectedYear}
                   aria-label="Filter archive by year"
@@ -289,9 +346,9 @@ export default function HistoricalPage({
                     setArchiveMonth('all')
                   }}
                   style={{
-                    background: '#fffdf8',
-                    color: '#2a2824',
-                    border: '1px solid #dfd9cc',
+                    background: '#F4EADA',
+                    color: '#101010',
+                    border: '1px solid rgba(16,16,16,0.15)',
                     padding: '6px 12px',
                     borderRadius: 6,
                     fontSize: 13
@@ -303,15 +360,15 @@ export default function HistoricalPage({
                 </select>
                 </label>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#88837a', fontWeight: 600 }}>MONTH:</span>
+                  <span style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)', fontWeight: 600 }}>MONTH:</span>
                   <select
                     value={activeArchiveMonth}
                     aria-label="Filter archive by month"
                     onChange={(e) => setArchiveMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                     style={{
-                      background: '#fffdf8',
-                      color: '#2a2824',
-                      border: '1px solid #dfd9cc',
+                      background: '#F4EADA',
+                      color: '#101010',
+                      border: '1px solid rgba(16,16,16,0.15)',
                       padding: '6px 12px',
                       borderRadius: 6,
                       fontSize: 13
@@ -329,13 +386,13 @@ export default function HistoricalPage({
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ background: '#f8f4ee', color: '#3a3630' }}>
+                  <tr style={{ background: '#EFE2CF', color: '#101010' }}>
                     <th style={{ padding: '8px 10px' }}>Period</th>
                     <th style={{ padding: '8px 10px' }}>Month</th>
                     <th style={{ padding: '8px 10px' }}>Risk</th>
                     <th style={{ padding: '8px 10px' }}>Observed LST</th>
                     <th style={{ padding: '8px 10px', color: '#4ade80' }}>PINN Pred.</th>
-                    <th style={{ padding: '8px 10px', color: '#fbbf24' }}>RF Pred.</th>
+                    <th style={{ padding: '8px 10px', color: '#EDA389' }}>RF Pred.</th>
                     <th style={{ padding: '8px 10px' }}>Residual Error</th>
                     <th style={{ padding: '8px 10px' }}>NDVI</th>
                     <th style={{ padding: '8px 10px' }}>NDBI</th>
@@ -348,7 +405,7 @@ export default function HistoricalPage({
                     <tr
                       key={`${r.yearMonth}-${i}`}
                       style={{
-                        borderBottom: '1px solid #f0ece3',
+                        borderBottom: '1px solid rgba(16,16,16,0.15)',
                         background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)'
                       }}
                     >
@@ -361,26 +418,26 @@ export default function HistoricalPage({
                           fontSize: 11,
                           fontWeight: 700,
                           background: r.riskLevel === 'HIGH' ? 'rgba(239,68,68,0.2)' : r.riskLevel === 'MODERATE' ? 'rgba(245,158,11,0.2)' : 'rgba(34,197,94,0.2)',
-                          color: r.riskLevel === 'HIGH' ? '#f87171' : r.riskLevel === 'MODERATE' ? '#fbbf24' : '#4ade80'
+                          color: r.riskLevel === 'HIGH' ? '#D5360C' : r.riskLevel === 'MODERATE' ? '#EDA389' : '#4ade80'
                         }}>
                           {r.riskLevel}
                         </span>
                       </td>
-                      <td style={{ padding: '8px 10px', fontWeight: 700, color: '#f97316' }}>{r.avgLST.toFixed(1)}°C</td>
+                      <td style={{ padding: '8px 10px', fontWeight: 700, color: '#D5360C' }}>{r.avgLST.toFixed(1)}°C</td>
                       <td style={{ padding: '8px 10px', fontWeight: 700, color: '#4ade80' }}>{r.pinnPredictedLST.toFixed(1)}°C</td>
-                      <td style={{ padding: '8px 10px', color: '#fbbf24' }}>{r.rfPredictedLST.toFixed(1)}°C</td>
-                      <td style={{ padding: '8px 10px', color: Math.abs(r.residualError) < 0.4 ? '#4ade80' : '#f87171' }}>
+                      <td style={{ padding: '8px 10px', color: '#EDA389' }}>{r.rfPredictedLST.toFixed(1)}°C</td>
+                      <td style={{ padding: '8px 10px', color: Math.abs(r.residualError) < 0.4 ? '#4ade80' : '#D5360C' }}>
                         {r.residualError >= 0 ? `+${r.residualError.toFixed(2)}` : r.residualError.toFixed(2)}°C
                       </td>
                       <td style={{ padding: '8px 10px', color: '#22c55e' }}>{r.ndvi.toFixed(3)}</td>
-                      <td style={{ padding: '8px 10px', color: '#cbd5e1' }}>{r.ndbi.toFixed(3)}</td>
-                      <td style={{ padding: '8px 10px', color: '#60a5fa' }}>{r.ndwi.toFixed(3)}</td>
-                      <td style={{ padding: '8px 10px', color: '#93c5fd' }}>{r.albedo.toFixed(3)}</td>
+                      <td style={{ padding: '8px 10px', color: 'rgba(16,16,16,0.2)' }}>{r.ndbi.toFixed(3)}</td>
+                      <td style={{ padding: '8px 10px', color: '#D5360C' }}>{r.ndwi.toFixed(3)}</td>
+                      <td style={{ padding: '8px 10px', color: '#EDA389' }}>{r.albedo.toFixed(3)}</td>
                     </tr>
                   ))}
                   {archiveRecords.length === 0 && (
                     <tr>
-                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: '#77736b' }}>
+                      <td colSpan={11} style={{ padding: 24, textAlign: 'center', color: 'rgba(16,16,16,0.65)' }}>
                         No records available for this year and month.
                       </td>
                     </tr>
@@ -439,43 +496,43 @@ function LSTLookupPanel({
   const monthName = HIST_MONTH_NAMES[selectedMonth - 1]
 
   function lstColor(lst: number) {
-    if (lst >= 40) return '#ef4444'
-    if (lst >= 37) return '#f97316'
-    if (lst >= 33) return '#f59e0b'
+    if (lst >= 40) return '#D5360C'
+    if (lst >= 37) return '#D5360C'
+    if (lst >= 33) return '#EDA389'
     if (lst >= 29) return '#22c55e'
-    return '#60a5fa'
+    return '#D5360C'
   }
 
   function riskBg(risk: string) {
-    if (risk === 'HIGH') return { bg: 'rgba(239,68,68,0.15)', color: '#f87171' }
-    if (risk === 'MODERATE') return { bg: 'rgba(245,158,11,0.12)', color: '#fbbf24' }
+    if (risk === 'HIGH') return { bg: 'rgba(239,68,68,0.15)', color: '#D5360C' }
+    if (risk === 'MODERATE') return { bg: 'rgba(245,158,11,0.12)', color: '#EDA389' }
     return { bg: 'rgba(34,197,94,0.10)', color: '#4ade80' }
   }
 
   return (
     <div className="hist-section">
-      <div className="panel" style={{ background: '#fffdf8', padding: 24, borderRadius: 12, border: '1px solid #dfd9cc' }}>
-        <h2 style={{ fontSize: 18, margin: '0 0 4px', color: '#2a2824' }}>Precise LST Lookup · {activeLoc.name} ({selectedWard})</h2>
-        <p style={{ margin: '0 0 20px', fontSize: 13, color: '#77736b' }}>
+      <div className="panel" style={{ background: '#F4EADA', padding: 24, borderRadius: 12, border: '1px solid rgba(16,16,16,0.15)' }}>
+        <h2 style={{ fontSize: 18, margin: '0 0 4px', color: '#101010' }}>Precise LST Lookup · {activeLoc.name} ({selectedWard})</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: 'rgba(16,16,16,0.65)' }}>
           Select a year and month to retrieve the exact observed Land Surface Temperature from the 2,304-record PINN dataset.
         </p>
 
         {/* Selectors */}
         <div style={{
           display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center',
-          background: '#f5efe4', padding: '16px 20px', borderRadius: 10, marginBottom: 24,
-          border: '1px solid #e8e2d8'
+          background: '#EFE2CF', padding: '16px 20px', borderRadius: 10, marginBottom: 24,
+          border: '1px solid rgba(16,16,16,0.15)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Calendar size={16} style={{ color: '#e86631' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#77736b', letterSpacing: '0.06em' }}>YEAR</span>
+            <Calendar size={16} style={{ color: '#D5360C' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(16,16,16,0.65)', letterSpacing: '0.06em' }}>YEAR</span>
             <select
               id="hist-lookup-year"
               value={selectedYear}
               onChange={e => onYearChange(Number(e.target.value))}
               style={{
-                background: '#fffdf8', color: '#2a2824',
-                border: '1px solid #dfd9cc',
+                background: '#F4EADA', color: '#101010',
+                border: '1px solid rgba(16,16,16,0.15)',
                 padding: '8px 14px', borderRadius: 8, fontSize: 14, fontWeight: 700,
                 cursor: 'pointer', outline: 'none', minWidth: 90
               }}
@@ -487,15 +544,15 @@ function LSTLookupPanel({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Thermometer size={16} style={{ color: '#60a5fa' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#77736b', letterSpacing: '0.06em' }}>MONTH</span>
+            <Thermometer size={16} style={{ color: '#D5360C' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(16,16,16,0.65)', letterSpacing: '0.06em' }}>MONTH</span>
             <select
               id="hist-lookup-month"
               value={selectedMonth}
               onChange={e => onMonthChange(Number(e.target.value))}
               style={{
-                background: '#fffdf8', color: '#2a2824',
-                border: '1px solid #dfd9cc',
+                background: '#F4EADA', color: '#101010',
+                border: '1px solid rgba(16,16,16,0.15)',
                 padding: '8px 14px', borderRadius: 8, fontSize: 14, fontWeight: 700,
                 cursor: 'pointer', outline: 'none', minWidth: 130
               }}
@@ -507,10 +564,10 @@ function LSTLookupPanel({
           </div>
 
           <div style={{
-            marginLeft: 'auto', fontSize: 12, color: '#9b968d',
+            marginLeft: 'auto', fontSize: 12, color: 'rgba(16,16,16,0.65)',
             display: 'flex', alignItems: 'center', gap: 6
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: allZones.length > 0 ? '#4ade80' : '#ef4444', display: 'inline-block' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: allZones.length > 0 ? '#4ade80' : '#D5360C', display: 'inline-block' }} />
             {allZones.length > 0 ? `${allZones.length} records found` : 'No data for this period'}
           </div>
         </div>
@@ -526,41 +583,41 @@ function LSTLookupPanel({
                 border: `1px solid ${lstColor(singleRecord.avgLST)}33`,
                 borderRadius: 12, padding: '20px 24px', textAlign: 'center'
               }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#88837a', marginBottom: 4 }}>OBSERVED LST</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', marginBottom: 4 }}>OBSERVED LST</div>
                 <div style={{ fontSize: 40, fontWeight: 900, color: lstColor(singleRecord.avgLST), lineHeight: 1 }}>
                   {singleRecord.avgLST.toFixed(1)}°C
                 </div>
-                <div style={{ fontSize: 12, color: '#88837a', marginTop: 6 }}>{monthName} {selectedYear} · {selectedWard}</div>
+                <div style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)', marginTop: 6 }}>{monthName} {selectedYear} · {selectedWard}</div>
               </div>
 
               <div style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 12, padding: '20px 24px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#88837a', marginBottom: 4 }}>PINN PREDICTED LST</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', marginBottom: 4 }}>PINN PREDICTED LST</div>
                 <div style={{ fontSize: 40, fontWeight: 900, color: '#4ade80', lineHeight: 1 }}>
                   {singleRecord.pinnPredictedLST.toFixed(1)}°C
                 </div>
-                <div style={{ fontSize: 12, color: '#88837a', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)', marginTop: 6 }}>
                   Residual: {singleRecord.residualError >= 0 ? `+${singleRecord.residualError.toFixed(2)}` : singleRecord.residualError.toFixed(2)}°C
                 </div>
               </div>
 
               <div style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 12, padding: '20px 24px', textAlign: 'center' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#88837a', marginBottom: 4 }}>RF PREDICTED LST</div>
-                <div style={{ fontSize: 40, fontWeight: 900, color: '#fbbf24', lineHeight: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', marginBottom: 4 }}>RF PREDICTED LST</div>
+                <div style={{ fontSize: 40, fontWeight: 900, color: '#EDA389', lineHeight: 1 }}>
                   {singleRecord.rfPredictedLST.toFixed(1)}°C
                 </div>
-                <div style={{ fontSize: 12, color: '#88837a', marginTop: 6 }}>Statistical Baseline</div>
+                <div style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)', marginTop: 6 }}>Statistical Baseline</div>
               </div>
 
-              <div style={{ background: '#fbf9f4', border: '1px solid #e8e2d8', borderRadius: 12, padding: '16px 20px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#88837a', marginBottom: 10 }}>SPECTRAL INDICES</div>
+              <div style={{ background: '#F4EADA', border: '1px solid rgba(16,16,16,0.15)', borderRadius: 12, padding: '16px 20px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', marginBottom: 10 }}>SPECTRAL INDICES</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {[['NDVI (Vegetation)', singleRecord.ndvi.toFixed(3), '#22c55e'],
-                    ['NDBI (Built-up)', singleRecord.ndbi.toFixed(3), '#cbd5e1'],
-                    ['NDWI (Water)', singleRecord.ndwi.toFixed(3), '#60a5fa'],
-                    ['Albedo', singleRecord.albedo.toFixed(3), '#93c5fd']
+                    ['NDBI (Built-up)', singleRecord.ndbi.toFixed(3), 'rgba(16,16,16,0.2)'],
+                    ['NDWI (Water)', singleRecord.ndwi.toFixed(3), '#D5360C'],
+                    ['Albedo', singleRecord.albedo.toFixed(3), '#EDA389']
                   ].map(([label, val, color]) => (
                     <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#77736b' }}>{label}</span>
+                      <span style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)' }}>{label}</span>
                       <strong style={{ fontSize: 13, color: color as string }}>{val}</strong>
                     </div>
                   ))}
@@ -575,19 +632,19 @@ function LSTLookupPanel({
               border: `1px solid ${riskBg(singleRecord.riskLevel).color}44`,
               borderRadius: 8, padding: '10px 20px', marginBottom: 24
             }}>
-              <span style={{ fontSize: 13, color: '#77736b' }}>Heat Risk Classification:</span>
+              <span style={{ fontSize: 13, color: 'rgba(16,16,16,0.65)' }}>Heat Risk Classification:</span>
               <strong style={{ fontSize: 14, color: riskBg(singleRecord.riskLevel).color }}>{singleRecord.riskLevel}</strong>
-              <span style={{ fontSize: 12, color: '#9b968d' }}>· {singleRecord.monthDataSource}</span>
+              <span style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)' }}>· {singleRecord.monthDataSource}</span>
             </div>
           </>
         ) : (
           allZones.length === 0 && (
             <div style={{
-              textAlign: 'center', padding: 40, color: '#9b968d',
-              background: '#fffdf8', borderRadius: 10, marginBottom: 20
+              textAlign: 'center', padding: 40, color: 'rgba(16,16,16,0.65)',
+              background: '#F4EADA', borderRadius: 10, marginBottom: 20
             }}>
               <Thermometer size={32} style={{ opacity: 0.3, margin: '0 auto 10px' }} />
-              <p>No dataset records available for <strong style={{ color: '#2a2824' }}>{monthName} {selectedYear}</strong>.</p>
+              <p>No dataset records available for <strong style={{ color: '#101010' }}>{monthName} {selectedYear}</strong>.</p>
               <p style={{ fontSize: 12, marginTop: 4 }}>Dataset covers Jan 2016 – Aug 2026.</p>
             </div>
           )
@@ -596,17 +653,17 @@ function LSTLookupPanel({
         {/* All-zones for the period */}
         {allZones.length > 0 && (
           <>
-            <h3 style={{ fontSize: 15, margin: '0 0 12px', color: '#2a2824' }}>
+            <h3 style={{ fontSize: 15, margin: '0 0 12px', color: '#101010' }}>
               All 18 Zones · {monthName} {selectedYear}
             </h3>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: '#f8f4ee', color: '#5f5b54' }}>
+                  <tr style={{ background: '#EFE2CF', color: 'rgba(16,16,16,0.65)' }}>
                     <th style={{ padding: '8px 12px', textAlign: 'left' }}>Ward</th>
                     <th style={{ padding: '8px 12px', textAlign: 'left' }}>Location</th>
                     <th style={{ padding: '8px 12px', textAlign: 'left' }}>Risk</th>
-                    <th style={{ padding: '8px 12px', color: '#f97316' }}>Observed LST</th>
+                    <th style={{ padding: '8px 12px', color: '#D5360C' }}>Observed LST</th>
                     <th style={{ padding: '8px 12px', color: '#4ade80' }}>PINN Pred.</th>
                     <th style={{ padding: '8px 12px' }}>NDVI</th>
                     <th style={{ padding: '8px 12px' }}>NDBI</th>
@@ -618,12 +675,12 @@ function LSTLookupPanel({
                     <tr
                       key={r.ward}
                       style={{
-                        borderBottom: '1px solid #f0ece3',
+                        borderBottom: '1px solid rgba(16,16,16,0.15)',
                         background: r.ward === selectedWard ? 'rgba(232,102,49,0.1)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)'
                       }}
                     >
                       <td style={{ padding: '8px 12px', fontWeight: 700 }}>{r.ward}</td>
-                      <td style={{ padding: '8px 12px', color: '#3a3630' }}>{r.location}</td>
+                      <td style={{ padding: '8px 12px', color: '#101010' }}>{r.location}</td>
                       <td style={{ padding: '8px 12px' }}>
                         <span style={{
                           padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700,
@@ -633,8 +690,8 @@ function LSTLookupPanel({
                       <td style={{ padding: '8px 12px', fontWeight: 800, color: lstColor(r.avgLST), fontSize: 14 }}>{r.avgLST.toFixed(1)}°C</td>
                       <td style={{ padding: '8px 12px', fontWeight: 700, color: '#4ade80' }}>{r.pinnPredictedLST.toFixed(1)}°C</td>
                       <td style={{ padding: '8px 12px', color: '#22c55e' }}>{r.ndvi.toFixed(3)}</td>
-                      <td style={{ padding: '8px 12px', color: '#cbd5e1' }}>{r.ndbi.toFixed(3)}</td>
-                      <td style={{ padding: '8px 12px', color: '#93c5fd' }}>{r.albedo.toFixed(3)}</td>
+                      <td style={{ padding: '8px 12px', color: 'rgba(16,16,16,0.2)' }}>{r.ndbi.toFixed(3)}</td>
+                      <td style={{ padding: '8px 12px', color: '#EDA389' }}>{r.albedo.toFixed(3)}</td>
                     </tr>
                   ))}
                 </tbody>

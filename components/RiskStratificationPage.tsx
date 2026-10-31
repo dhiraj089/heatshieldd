@@ -342,7 +342,7 @@ export default function RiskStratificationPage({
             type="button"
             className={`hm-mode-btn ${riskMode === 'dataset' ? 'active hist' : ''}`}
             onClick={() => setRiskMode('dataset')}
-            style={riskMode === 'dataset' ? { background: '#e86631', color: '#fff', borderColor: '#e86631' } : {}}
+            style={riskMode === 'dataset' ? { background: '#D5360C', color: '#fff', borderColor: '#D5360C' } : {}}
           >
             <Calendar size={14} />
             <strong>Exact LST Dataset</strong>
@@ -369,12 +369,12 @@ export default function RiskStratificationPage({
       {/* ── YEAR + MONTH SELECTOR TOOLBAR ── */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18,
-        background: '#fbf9f4', border: '1px solid #dfd9cc',
+        background: '#F4EADA', border: '1px solid rgba(16,16,16,0.15)',
         borderRadius: 12, padding: '14px 20px', flexWrap: 'wrap'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MapPin size={16} style={{ color: '#e86631' }} />
-          <label htmlFor="risk-location-select" style={{ fontSize: 13, fontWeight: 700, color: '#5f5b54', letterSpacing: '0.05em' }}>
+          <MapPin size={16} style={{ color: '#D5360C' }} />
+          <label htmlFor="risk-location-select" style={{ fontSize: 13, fontWeight: 700, color: 'rgba(16,16,16,0.65)', letterSpacing: '0.05em' }}>
             SELECT LOCATION:
           </label>
           <select
@@ -386,8 +386,8 @@ export default function RiskStratificationPage({
               if (location) handleSelectLoc(location)
             }}
             style={{
-              background: '#fffdf8', color: '#2a2824',
-              border: '1px solid #dfd9cc',
+              background: '#F4EADA', color: '#101010',
+              border: '1px solid rgba(16,16,16,0.15)',
               padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
               cursor: 'pointer', outline: 'none', maxWidth: 260
             }}
@@ -399,8 +399,8 @@ export default function RiskStratificationPage({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Calendar size={16} style={{ color: '#e86631' }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#5f5b54', letterSpacing: '0.05em' }}>SELECT YEAR:</span>
+          <Calendar size={16} style={{ color: '#D5360C' }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(16,16,16,0.65)', letterSpacing: '0.05em' }}>SELECT YEAR:</span>
           <select
             id="risk-year-select"
             value={hmYear}
@@ -409,8 +409,8 @@ export default function RiskStratificationPage({
               if (riskMode !== 'dataset') setRiskMode('dataset')
             }}
             style={{
-              background: '#fffdf8', color: '#2a2824',
-              border: '1px solid #dfd9cc',
+              background: '#F4EADA', color: '#101010',
+              border: '1px solid rgba(16,16,16,0.15)',
               padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
               cursor: 'pointer', outline: 'none'
             }}
@@ -422,8 +422,8 @@ export default function RiskStratificationPage({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Thermometer size={16} style={{ color: '#60a5fa' }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#5f5b54', letterSpacing: '0.05em' }}>SELECT MONTH:</span>
+          <Thermometer size={16} style={{ color: '#D5360C' }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(16,16,16,0.65)', letterSpacing: '0.05em' }}>SELECT MONTH:</span>
           <select
             id="risk-month-select"
             value={hmMonth}
@@ -432,8 +432,8 @@ export default function RiskStratificationPage({
               if (riskMode !== 'dataset') setRiskMode('dataset')
             }}
             style={{
-              background: '#fffdf8', color: '#2a2824',
-              border: '1px solid #dfd9cc',
+              background: '#F4EADA', color: '#101010',
+              border: '1px solid rgba(16,16,16,0.15)',
               padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
               cursor: 'pointer', outline: 'none'
             }}
@@ -447,7 +447,7 @@ export default function RiskStratificationPage({
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{
             background: 'rgba(232,102,49,0.12)', border: '1px solid rgba(232,102,49,0.3)',
-            borderRadius: 8, padding: '6px 14px', fontSize: 12, color: '#e86631', fontWeight: 600
+            borderRadius: 8, padding: '6px 14px', fontSize: 12, color: '#D5360C', fontWeight: 600
           }}>
             📍 Active Zone: <strong>{activeSelectedMeta.loc.zoneNumber} ({activeSelectedMeta.loc.name})</strong> · {riskMode === 'dataset' ? 'Observed LST' : 'Mode LST'}: <strong style={{ fontSize: 14 }}>{activeSelectedMeta.lst}°C</strong>
             {activeSelectedMeta.pinnPredictedLST != null && (
@@ -457,7 +457,7 @@ export default function RiskStratificationPage({
               · Current air: <strong>{hasCurrentReading && weather?.temp != null ? `${weather.temp.toFixed(1)}°C` : '31.5°C'}</strong>
             </span>
           </div>
-          <span style={{ fontSize: 12, color: '#9b968d' }}>
+          <span style={{ fontSize: 12, color: 'rgba(16,16,16,0.65)' }}>
             Period: <strong>{MONTH_NAMES[hmMonth - 1]} {hmYear}</strong> ({computedLocations.length} Wards)
           </span>
         </div>
@@ -617,7 +617,7 @@ export default function RiskStratificationPage({
 
               {/* Sort By Dropdown */}
               <div className="hm-sort-control">
-                <ArrowUpDown size={13} style={{ color: '#e86631' }} />
+                <ArrowUpDown size={13} style={{ color: '#D5360C' }} />
                 <span>SORT:</span>
                 <select
                   value={`${sortField}-${sortOrder}`}
@@ -774,7 +774,7 @@ export default function RiskStratificationPage({
                           </span>
                         </td>
                         <td className={isHigh ? 'danger' : ''}>
-                          <strong style={{ fontSize: 13, color: isHigh ? '#ef4444' : isMod ? '#f59e0b' : '#10b981' }}>{meta.lst}°C</strong>
+                          <strong style={{ fontSize: 13, color: isHigh ? '#D5360C' : isMod ? '#EDA389' : '#10b981' }}>{meta.lst}°C</strong>
                         </td>
                         <td>
                           {riskMode === 'dataset' && meta.pinnPredictedLST != null ? (
@@ -794,7 +794,7 @@ export default function RiskStratificationPage({
                         </td>
                         <td>
                           {riskMode === 'dataset' && meta.ndbi != null ? (
-                            <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{meta.ndbi.toFixed(3)}</span>
+                            <span style={{ color: 'rgba(16,16,16,0.2)', fontWeight: 600 }}>{meta.ndbi.toFixed(3)}</span>
                           ) : (
                             meta.loc.populationDensity
                           )}
@@ -820,10 +820,10 @@ export default function RiskStratificationPage({
                               {/* ── Header ── */}
                               <div className="xai-header">
                                 <div className="xai-header-left">
-                                  <Sparkles size={16} style={{ color: '#e86631' }} />
+                                  <Sparkles size={16} style={{ color: '#D5360C' }} />
                                   <div>
-                                    <strong style={{ fontSize: 14, color: '#1e293b' }}>Explainable AI · {verdictData.tier} Verdict for {meta.loc.name}</strong>
-                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 2 }}>
+                                    <strong style={{ fontSize: 14, color: '#101010' }}>Explainable AI · {verdictData.tier} Verdict for {meta.loc.name}</strong>
+                                    <span style={{ fontSize: 11, color: 'rgba(16,16,16,0.65)', display: 'block', marginTop: 2 }}>
                                       {riskMode === 'dataset'
                                         ? `PINN dataset record · ${MONTH_NAMES[hmMonth - 1]} ${hmYear} · ${meta.loc.zoneNumber}`
                                         : riskMode === 'live'
@@ -834,7 +834,7 @@ export default function RiskStratificationPage({
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   {verdictData.modelError != null && (
-                                    <span style={{ fontSize: 11, background: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
+                                    <span style={{ fontSize: 11, background: '#F4EADA', color: 'rgba(16,16,16,0.65)', padding: '3px 8px', borderRadius: 4, fontWeight: 600 }}>
                                       PINN residual: ±{verdictData.modelError.toFixed(2)}°C
                                     </span>
                                   )}
@@ -854,33 +854,33 @@ export default function RiskStratificationPage({
                                 border: `1px solid ${meta.severity === 'High' ? 'rgba(239,68,68,.2)' : meta.severity === 'Moderate' ? 'rgba(245,158,11,.2)' : 'rgba(34,197,94,.2)'}`,
                                 borderRadius: 10, padding: '12px 16px', marginBottom: 14,
                               }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: meta.severity === 'High' ? '#dc2626' : meta.severity === 'Moderate' ? '#d97706' : '#16a34a', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: meta.severity === 'High' ? '#D5360C' : meta.severity === 'Moderate' ? '#D5360C' : '#16a34a', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>
                                   📌 Diagnostic Summary
                                 </div>
-                                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: '#1e293b' }}>
+                                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: '#101010' }}>
                                   {verdictData.verdict}
                                 </p>
                               </div>
 
                               {/* ── 2. Physics-Informed Key Risk Factors (Deviations from Baseline) ── */}
                               <div style={{ marginBottom: 14 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
                                   🔍 Physics-Informed Key Risk Drivers (Deviations vs Thane Mean)
                                 </div>
                                 {verdictData.causes.length > 0 ? (
                                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
                                     {verdictData.causes.map((c, i) => (
                                       <div key={i} style={{
-                                        background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8,
-                                        padding: '9px 12px', borderLeft: `3px solid ${c.direction === 'risk-raising' ? '#ef4444' : '#22c55e'}`
+                                        background: '#fff', border: '1px solid rgba(16,16,16,0.15)', borderRadius: 8,
+                                        padding: '9px 12px', borderLeft: `3px solid ${c.direction === 'risk-raising' ? '#D5360C' : '#22c55e'}`
                                       }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                                          <strong style={{ fontSize: 12, color: '#1e293b' }}>{c.label}</strong>
-                                          <span style={{ fontSize: 10, fontWeight: 700, color: c.direction === 'risk-raising' ? '#ef4444' : '#22c55e', background: c.direction === 'risk-raising' ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                          <strong style={{ fontSize: 12, color: '#101010' }}>{c.label}</strong>
+                                          <span style={{ fontSize: 10, fontWeight: 700, color: c.direction === 'risk-raising' ? '#D5360C' : '#22c55e', background: c.direction === 'risk-raising' ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)', padding: '1px 6px', borderRadius: 4 }}>
                                             {c.direction === 'risk-raising' ? '▲ Risk Factor' : '▼ Protective'}
                                           </span>
                                         </div>
-                                        <div style={{ fontSize: 11.5, color: '#475569', lineHeight: 1.4 }}>{c.text}</div>
+                                        <div style={{ fontSize: 11.5, color: 'rgba(16,16,16,0.65)', lineHeight: 1.4 }}>{c.text}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -894,7 +894,7 @@ export default function RiskStratificationPage({
 
                               {/* ── 3. Visual SHAP-Style Feature Contribution Bars ── */}
                               <div style={{ marginBottom: 14 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
                                   📊 Quantitative Feature Contributions (Physics-Constrained SHAP Analysis)
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -903,26 +903,26 @@ export default function RiskStratificationPage({
                                   {(() => {
                                     const lstRange = 8
                                     const lstContrib = Math.min(100, Math.max(0, ((lstDelta + lstRange / 2) / lstRange) * 100))
-                                    const lstBarColor = lstDelta > 1.5 ? '#ef4444' : lstDelta > 0 ? '#f97316' : lstDelta < -1.5 ? '#22c55e' : '#60a5fa'
+                                    const lstBarColor = lstDelta > 1.5 ? '#D5360C' : lstDelta > 0 ? '#D5360C' : lstDelta < -1.5 ? '#22c55e' : '#D5360C'
                                     return (
-                                      <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 14px', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ background: '#F4EADA', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(16,16,16,0.15)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <Thermometer size={13} style={{ color: lstBarColor }} />
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>Land Surface Temperature (LST)</span>
-                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: lstDelta > 0 ? '#ef4444' : '#22c55e', background: lstDelta > 0 ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#101010' }}>Land Surface Temperature (LST)</span>
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: lstDelta > 0 ? '#D5360C' : '#22c55e', background: lstDelta > 0 ? 'rgba(239,68,68,.1)' : 'rgba(34,197,94,.1)' }}>
                                               {lstDelta > 0 ? 'risk-raising' : 'risk-lowering'}
                                             </span>
                                           </div>
                                           <span style={{ fontSize: 12, fontWeight: 800, color: lstBarColor }}>
-                                            {meta.lst.toFixed(1)}°C <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>({formatDelta(lstDelta)}°C vs mean)</span>
+                                            {meta.lst.toFixed(1)}°C <span style={{ fontSize: 10, fontWeight: 400, color: 'rgba(16,16,16,0.65)' }}>({formatDelta(lstDelta)}°C vs mean)</span>
                                           </span>
                                         </div>
-                                        <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                                        <div style={{ height: 8, background: 'rgba(16,16,16,0.15)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
                                           <div style={{ height: '100%', width: `${lstContrib}%`, background: `linear-gradient(90deg,${lstBarColor}88,${lstBarColor})`, borderRadius: 4, transition: 'width .5s ease' }} />
                                           <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(0,0,0,.15)' }} />
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: '#94a3b8' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'rgba(16,16,16,0.65)' }}>
                                           <span>← Cooling</span><span>City Baseline {explainabilityBenchmarks.avgLST.toFixed(1)}°C</span><span>Heating →</span>
                                         </div>
                                       </div>
@@ -933,27 +933,27 @@ export default function RiskStratificationPage({
                                   {meta.ndvi != null && ndviDelta != null && (() => {
                                     const ndviRange = 0.25
                                     const ndviContrib = Math.min(100, Math.max(0, ((-ndviDelta + ndviRange / 2) / ndviRange) * 100))
-                                    const ndviBarColor = ndviDelta < -0.05 ? '#ef4444' : ndviDelta < 0 ? '#f97316' : ndviDelta > 0.05 ? '#22c55e' : '#60a5fa'
+                                    const ndviBarColor = ndviDelta < -0.05 ? '#D5360C' : ndviDelta < 0 ? '#D5360C' : ndviDelta > 0.05 ? '#22c55e' : '#D5360C'
                                     const ndviDir = ndviDelta < -0.03 ? 'risk-raising' : ndviDelta > 0.03 ? 'cooling-benefit' : 'neutral'
                                     return (
-                                      <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 14px', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ background: '#F4EADA', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(16,16,16,0.15)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <span style={{ fontSize: 13 }}>🌿</span>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>Vegetation (NDVI)</span>
-                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: ndviDelta < -0.03 ? '#ef4444' : ndviDelta > 0.03 ? '#22c55e' : '#64748b', background: ndviDelta < -0.03 ? 'rgba(239,68,68,.1)' : ndviDelta > 0.03 ? 'rgba(34,197,94,.1)' : 'rgba(100,116,139,.1)' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#101010' }}>Vegetation (NDVI)</span>
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: ndviDelta < -0.03 ? '#D5360C' : ndviDelta > 0.03 ? '#22c55e' : 'rgba(16,16,16,0.65)', background: ndviDelta < -0.03 ? 'rgba(239,68,68,.1)' : ndviDelta > 0.03 ? 'rgba(34,197,94,.1)' : 'rgba(100,116,139,.1)' }}>
                                               {ndviDir}
                                             </span>
                                           </div>
                                           <span style={{ fontSize: 12, fontWeight: 800, color: ndviBarColor }}>
-                                            {meta.ndvi.toFixed(3)} <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>({formatDelta(ndviDelta)} vs ref {explainabilityBenchmarks.cityRef.ndvi.toFixed(3)})</span>
+                                            {meta.ndvi.toFixed(3)} <span style={{ fontSize: 10, fontWeight: 400, color: 'rgba(16,16,16,0.65)' }}>({formatDelta(ndviDelta)} vs ref {explainabilityBenchmarks.cityRef.ndvi.toFixed(3)})</span>
                                           </span>
                                         </div>
-                                        <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                                        <div style={{ height: 8, background: 'rgba(16,16,16,0.15)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
                                           <div style={{ height: '100%', width: `${ndviContrib}%`, background: `linear-gradient(90deg,${ndviBarColor}88,${ndviBarColor})`, borderRadius: 4, transition: 'width .5s ease' }} />
                                           <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(0,0,0,.15)' }} />
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: '#94a3b8' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'rgba(16,16,16,0.65)' }}>
                                           <span>← More Vegetation (Cooling)</span><span>City Ref: {explainabilityBenchmarks.cityRef.ndvi.toFixed(3)}</span><span>Less Vegetation (Heating) →</span>
                                         </div>
                                       </div>
@@ -964,27 +964,27 @@ export default function RiskStratificationPage({
                                   {meta.ndbi != null && ndbiDelta != null && (() => {
                                     const ndbiRange = 0.2
                                     const ndbiContrib = Math.min(100, Math.max(0, ((ndbiDelta + ndbiRange / 2) / ndbiRange) * 100))
-                                    const ndbiBarColor = ndbiDelta > 0.05 ? '#ef4444' : ndbiDelta > 0 ? '#f97316' : ndbiDelta < -0.05 ? '#22c55e' : '#60a5fa'
+                                    const ndbiBarColor = ndbiDelta > 0.05 ? '#D5360C' : ndbiDelta > 0 ? '#D5360C' : ndbiDelta < -0.05 ? '#22c55e' : '#D5360C'
                                     const ndbiDir = ndbiDelta > 0.03 ? 'risk-raising' : ndbiDelta < -0.03 ? 'cooling-benefit' : 'neutral'
                                     return (
-                                      <div style={{ background: '#f8fafc', borderRadius: 8, padding: '10px 14px', border: '1px solid #e2e8f0' }}>
+                                      <div style={{ background: '#F4EADA', borderRadius: 8, padding: '10px 14px', border: '1px solid rgba(16,16,16,0.15)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                             <span style={{ fontSize: 13 }}>🏗️</span>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>Built-up Density (NDBI)</span>
-                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: ndbiDelta > 0.03 ? '#ef4444' : ndbiDelta < -0.03 ? '#22c55e' : '#64748b', background: ndbiDelta > 0.03 ? 'rgba(239,68,68,.1)' : ndbiDelta < -0.03 ? 'rgba(34,197,94,.1)' : 'rgba(100,116,139,.1)' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#101010' }}>Built-up Density (NDBI)</span>
+                                            <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 4, color: ndbiDelta > 0.03 ? '#D5360C' : ndbiDelta < -0.03 ? '#22c55e' : 'rgba(16,16,16,0.65)', background: ndbiDelta > 0.03 ? 'rgba(239,68,68,.1)' : ndbiDelta < -0.03 ? 'rgba(34,197,94,.1)' : 'rgba(100,116,139,.1)' }}>
                                               {ndbiDir}
                                             </span>
                                           </div>
                                           <span style={{ fontSize: 12, fontWeight: 800, color: ndbiBarColor }}>
-                                            {meta.ndbi.toFixed(3)} <span style={{ fontSize: 10, fontWeight: 400, color: '#64748b' }}>({formatDelta(ndbiDelta)} vs ref {explainabilityBenchmarks.cityRef.ndbi.toFixed(3)})</span>
+                                            {meta.ndbi.toFixed(3)} <span style={{ fontSize: 10, fontWeight: 400, color: 'rgba(16,16,16,0.65)' }}>({formatDelta(ndbiDelta)} vs ref {explainabilityBenchmarks.cityRef.ndbi.toFixed(3)})</span>
                                           </span>
                                         </div>
-                                        <div style={{ height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                                        <div style={{ height: 8, background: 'rgba(16,16,16,0.15)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
                                           <div style={{ height: '100%', width: `${ndbiContrib}%`, background: `linear-gradient(90deg,${ndbiBarColor}88,${ndbiBarColor})`, borderRadius: 4, transition: 'width .5s ease' }} />
                                           <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(0,0,0,.15)' }} />
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: '#94a3b8' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'rgba(16,16,16,0.65)' }}>
                                           <span>← Less Built-up (Cooling)</span><span>City Ref: {explainabilityBenchmarks.cityRef.ndbi.toFixed(3)}</span><span>More Built-up (Heating) →</span>
                                         </div>
                                       </div>
@@ -996,14 +996,14 @@ export default function RiskStratificationPage({
                               {/* ── 4. Precautions & Intervention Action Plan (Short / Medium / Long Term) ── */}
                               <div style={{
                                 background: '#fff',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid rgba(16,16,16,0.15)',
                                 borderRadius: 10,
                                 padding: '14px 16px',
                                 marginBottom: 14,
                                 width: '100%',
                                 boxSizing: 'border-box',
                               }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
                                   🛡️ Targeted Precautions & Mitigation Plan (Based on Causes)
                                 </div>
                                 <div style={{
@@ -1015,8 +1015,8 @@ export default function RiskStratificationPage({
                                 }}>
                                   {/* Short Term */}
                                   <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
+                                    background: '#F4EADA',
+                                    border: '1px solid rgba(16,16,16,0.15)',
                                     borderRadius: 8,
                                     padding: '12px 14px',
                                     display: 'flex',
@@ -1026,7 +1026,7 @@ export default function RiskStratificationPage({
                                     boxSizing: 'border-box',
                                     overflow: 'hidden',
                                   }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#D5360C', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                                       <span>⚡</span>
                                       <span>Short-Term (Immediate / 24-48h)</span>
                                     </div>
@@ -1034,7 +1034,7 @@ export default function RiskStratificationPage({
                                       margin: 0,
                                       paddingLeft: 18,
                                       fontSize: 11.5,
-                                      color: '#334155',
+                                      color: 'rgba(16,16,16,0.65)',
                                       lineHeight: 1.55,
                                       display: 'flex',
                                       flexDirection: 'column',
@@ -1053,8 +1053,8 @@ export default function RiskStratificationPage({
 
                                   {/* Medium Term */}
                                   <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
+                                    background: '#F4EADA',
+                                    border: '1px solid rgba(16,16,16,0.15)',
                                     borderRadius: 8,
                                     padding: '12px 14px',
                                     display: 'flex',
@@ -1064,7 +1064,7 @@ export default function RiskStratificationPage({
                                     boxSizing: 'border-box',
                                     overflow: 'hidden',
                                   }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#EDA389', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                                       <span>📅</span>
                                       <span>Medium-Term (1-6 Months)</span>
                                     </div>
@@ -1072,7 +1072,7 @@ export default function RiskStratificationPage({
                                       margin: 0,
                                       paddingLeft: 18,
                                       fontSize: 11.5,
-                                      color: '#334155',
+                                      color: 'rgba(16,16,16,0.65)',
                                       lineHeight: 1.55,
                                       display: 'flex',
                                       flexDirection: 'column',
@@ -1091,8 +1091,8 @@ export default function RiskStratificationPage({
 
                                   {/* Long Term */}
                                   <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
+                                    background: '#F4EADA',
+                                    border: '1px solid rgba(16,16,16,0.15)',
                                     borderRadius: 8,
                                     padding: '12px 14px',
                                     display: 'flex',
@@ -1110,7 +1110,7 @@ export default function RiskStratificationPage({
                                       margin: 0,
                                       paddingLeft: 18,
                                       fontSize: 11.5,
-                                      color: '#334155',
+                                      color: 'rgba(16,16,16,0.65)',
                                       lineHeight: 1.55,
                                       display: 'flex',
                                       flexDirection: 'column',
@@ -1131,8 +1131,8 @@ export default function RiskStratificationPage({
 
                               {/* ── 5. Zone Context & PINN Model Verification ── */}
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+                                <div style={{ background: '#F4EADA', border: '1px solid rgba(16,16,16,0.15)', borderRadius: 8, padding: '10px 14px' }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
                                     🏙️ Zone Morphology & Landmark
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11 }}>
@@ -1142,27 +1142,27 @@ export default function RiskStratificationPage({
                                       ['Key Landmark', meta.loc.keyLandmark],
                                     ].map(([label, val]) => (
                                       <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                        <span style={{ color: '#64748b', flexShrink: 0 }}>{label}</span>
-                                        <strong style={{ color: '#1e293b', textAlign: 'right', fontSize: label === 'Key Landmark' ? 10 : 11 }}>{val}</strong>
+                                        <span style={{ color: 'rgba(16,16,16,0.65)', flexShrink: 0 }}>{label}</span>
+                                        <strong style={{ color: '#101010', textAlign: 'right', fontSize: label === 'Key Landmark' ? 10 : 11 }}>{val}</strong>
                                       </div>
                                     ))}
                                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                      <span style={{ color: '#64748b' }}>Microclimate UHI Offset</span>
-                                      <strong style={{ color: meta.loc.lstOffset > 0 ? '#ef4444' : '#22c55e' }}>
+                                      <span style={{ color: 'rgba(16,16,16,0.65)' }}>Microclimate UHI Offset</span>
+                                      <strong style={{ color: meta.loc.lstOffset > 0 ? '#D5360C' : '#22c55e' }}>
                                         {meta.loc.lstOffset >= 0 ? `+${meta.loc.lstOffset}` : meta.loc.lstOffset}°C vs ambient
                                       </strong>
                                     </div>
                                     {meta.pinnPredictedLST != null && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ color: '#64748b' }}>PINN Neural Prediction</span>
+                                        <span style={{ color: 'rgba(16,16,16,0.65)' }}>PINN Neural Prediction</span>
                                         <strong style={{ color: '#4ade80' }}>{meta.pinnPredictedLST.toFixed(1)}°C</strong>
                                       </div>
                                     )}
                                   </div>
                                 </div>
 
-                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+                                <div style={{ background: '#F4EADA', border: '1px solid rgba(16,16,16,0.15)', borderRadius: 8, padding: '10px 14px' }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
                                     ⚙️ 10-Year Decadal Dataset Benchmarks
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11 }}>
@@ -1171,19 +1171,19 @@ export default function RiskStratificationPage({
                                       return zs ? (
                                         <>
                                           {[
-                                            ['10-yr Avg LST', `${zs.avgLST.toFixed(1)}°C`, '#f97316'],
-                                            ['Peak Recorded LST', `${zs.maxLST.toFixed(1)}°C`, '#ef4444'],
+                                            ['10-yr Avg LST', `${zs.avgLST.toFixed(1)}°C`, '#D5360C'],
+                                            ['Peak Recorded LST', `${zs.maxLST.toFixed(1)}°C`, '#D5360C'],
                                             ['PINN Solver MAE', `±${zs.pinnMAE.toFixed(3)}°C`, '#4ade80'],
                                             ['10-yr Avg NDVI', zs.avgNDVI.toFixed(3), '#22c55e'],
-                                            ['10-yr Avg NDBI', zs.avgNDBI.toFixed(3), '#94a3b8'],
+                                            ['10-yr Avg NDBI', zs.avgNDBI.toFixed(3), 'rgba(16,16,16,0.65)'],
                                           ].map(([label, val, color]) => (
                                             <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                              <span style={{ color: '#64748b' }}>{label}</span>
+                                              <span style={{ color: 'rgba(16,16,16,0.65)' }}>{label}</span>
                                               <strong style={{ color }}>{val}</strong>
                                             </div>
                                           ))}
                                         </>
-                                      ) : <span style={{ color: '#94a3b8' }}>No zone summary available.</span>
+                                      ) : <span style={{ color: 'rgba(16,16,16,0.65)' }}>No zone summary available.</span>
                                     })()}
                                   </div>
                                 </div>
@@ -1225,7 +1225,7 @@ export default function RiskStratificationPage({
             {/* Modal Header */}
             <div className="xai-modal-header">
               <div className="xai-modal-title-group">
-                <Sparkles size={20} style={{ color: '#e86631', flexShrink: 0, marginTop: 2 }} />
+                <Sparkles size={20} style={{ color: '#D5360C', flexShrink: 0, marginTop: 2 }} />
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <h3>{modalMeta.loc.name}</h3>
@@ -1253,7 +1253,7 @@ export default function RiskStratificationPage({
               <div className="xai-modal-metrics-strip">
                 <div className="xai-metric-box">
                   <span>Surface Temp (LST)</span>
-                  <strong style={{ color: modalMeta.severity === 'High' ? '#dc2626' : modalMeta.severity === 'Moderate' ? '#d97706' : '#16a34a' }}>
+                  <strong style={{ color: modalMeta.severity === 'High' ? '#D5360C' : modalMeta.severity === 'Moderate' ? '#D5360C' : '#16a34a' }}>
                     {modalMeta.lst}°C
                   </strong>
                   <small>
@@ -1263,7 +1263,7 @@ export default function RiskStratificationPage({
                 </div>
                 <div className="xai-metric-box">
                   <span>PINN Modeled LST</span>
-                  <strong style={{ color: '#2563eb' }}>
+                  <strong style={{ color: '#D5360C' }}>
                     {modalMeta.pinnPredictedLST != null ? `${modalMeta.pinnPredictedLST.toFixed(1)}°C` : `${modalMeta.ambientTemp}°C`}
                   </strong>
                   <small>{modalMeta.pinnPredictedLST != null ? 'Physics-informed AI' : 'Ambient offset'}</small>
@@ -1288,7 +1288,7 @@ export default function RiskStratificationPage({
 
               {/* Physics-Informed Key Risk Factors */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 7 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(16,16,16,0.65)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 7 }}>
                   🔍 Key Physics Risk Drivers (Deviations vs Thane Mean)
                 </div>
                 <div className="xai-drivers-grid">
@@ -1326,7 +1326,7 @@ export default function RiskStratificationPage({
 
               {/* Immediate Targeted Cooling Strategy */}
               <div className="xai-action-box">
-                <ShieldAlert size={18} style={{ color: '#e86631', flexShrink: 0, marginTop: 2 }} />
+                <ShieldAlert size={18} style={{ color: '#D5360C', flexShrink: 0, marginTop: 2 }} />
                 <div className="xai-action-content">
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
                     <strong>Recommended Cooling Intervention</strong>
