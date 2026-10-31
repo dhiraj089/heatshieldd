@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Fragment, useMemo, useState } from 'react'
+import React, { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   Calendar,
@@ -12,7 +12,10 @@ import {
   X,
   ShieldAlert,
   Flame,
-  Filter
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react'
 import {
   ALL_YEARS,
@@ -75,6 +78,31 @@ export default function RiskStratificationPage({
   const [severityFilter, setSeverityFilter] = useState<'all' | 'High' | 'Moderate' | 'Low'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedExplanationId, setExpandedExplanationId] = useState<string | null>(null)
+
+  // ── SORTING STATE ──
+  const [sortField, setSortField] = useState<'severity' | 'lst' | 'pinn' | 'name' | 'uhi' | 'priority'>('severity')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+
+  // ── EXPLAINABLE AI MODAL STATE ──
+  const [modalMeta, setModalMeta] = useState<RiskLocationMeta | null>(null)
+
+  // Close modal when pressing ESC
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setModalMeta(null)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const toggleSort = (field: 'severity' | 'lst' | 'pinn' | 'name' | 'uhi' | 'priority') => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder(field === 'name' ? 'asc' : 'desc')
+    }
+  }
 
   const currentAirTemp = weather?.temp ?? 31.5
 
@@ -235,9 +263,9 @@ export default function RiskStratificationPage({
   const avgModLST = Number((computedLocations.filter(c => c.severity === 'Moderate').reduce((a, b) => a + b.lst, 0) / (moderateCount || 1)).toFixed(1))
   const avgLowLST = Number((computedLocations.filter(c => c.severity === 'Low').reduce((a, b) => a + b.lst, 0) / (lowCount || 1)).toFixed(1))
 
-  // Filtered locations for table & highlights
+  // Filtered and sorted locations for table & highlights
   const displayedLocations = useMemo(() => {
-    return computedLocations.filter(c => {
+    const filtered = computedLocations.filter(c => {
       const matchSeverity = severityFilter === 'all' || c.severity === severityFilter
       const matchQuery =
         searchQuery.trim() === '' ||
@@ -247,7 +275,47 @@ export default function RiskStratificationPage({
         c.loc.keyLandmark.toLowerCase().includes(searchQuery.toLowerCase())
       return matchSeverity && matchQuery
     })
-  }, [computedLocations, severityFilter, searchQuery])
+
+    return filtered.sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'severity') {
+        const sevOrder = { High: 3, Moderate: 2, Low: 1 }
+        cmp = sevOrder[a.severity] - sevOrder[b.severity]
+        if (cmp === 0) cmp = a.lst - b.lst // Secondary sort by LST
+      } else if (sortField === 'lst') {
+        cmp = a.lst - b.lst
+      } else if (sortField === 'pinn') {
+        const aVal = a.pinnPredictedLST ?? a.ambientTemp
+        const bVal = b.pinnPredictedLST ?? b.ambientTemp
+        cmp = aVal - bVal
+      } else if (sortField === 'name') {
+        cmp = a.loc.name.localeCompare(b.loc.name)
+      } else if (sortField === 'uhi') {
+        cmp = a.loc.lstOffset - b.loc.lstOffset
+      } else if (sortField === 'priority') {
+        const prioOrder = { Emergency: 4, High: 3, Routine: 2, Protected: 1 }
+        cmp = prioOrder[a.coolingPriority] - prioOrder[b.coolingPriority]
+      }
+      return sortOrder === 'desc' ? -cmp : cmp
+    })
+  }, [computedLocations, severityFilter, searchQuery, sortField, sortOrder])
+
+  // Compute Explainable AI verdict for the modal selection
+  const modalVerdict = useMemo(() => {
+    if (!modalMeta) return null
+    return generateVerdict(
+      {
+        name: modalMeta.loc.name,
+        lst: modalMeta.lst,
+        ndvi: modalMeta.ndvi ?? explainabilityBenchmarks.avgNDVI,
+        ndbi: modalMeta.ndbi ?? explainabilityBenchmarks.avgNDBI,
+        pinnLst: modalMeta.pinnPredictedLST,
+        zoneType: modalMeta.loc.type,
+        riskLevel: modalMeta.riskLevel ?? modalMeta.severity,
+      },
+      explainabilityBenchmarks.cityRef
+    )
+  }, [modalMeta, explainabilityBenchmarks])
 
   const activeSelectedMeta = computedLocations.find(c => c.loc.id === selectedLocation.id) || computedLocations[0]
   const hasCurrentReading = weather?.dataSource === 'open-meteo' && weather?.location?.id === selectedLocation.id
@@ -547,8 +615,31 @@ export default function RiskStratificationPage({
                 </button>
               </div>
 
+              {/* Sort By Dropdown */}
+              <div className="hm-sort-control">
+                <ArrowUpDown size={13} style={{ color: '#e86631' }} />
+                <span>SORT:</span>
+                <select
+                  value={`${sortField}-${sortOrder}`}
+                  onChange={(e) => {
+                    const [f, o] = e.target.value.split('-') as [typeof sortField, typeof sortOrder]
+                    setSortField(f)
+                    setSortOrder(o)
+                  }}
+                  aria-label="Sort table by metric"
+                >
+                  <option value="severity-desc">Thermal Severity (Highest First)</option>
+                  <option value="severity-asc">Thermal Severity (Lowest First)</option>
+                  <option value="lst-desc">Surface Temp LST (Hot to Cool)</option>
+                  <option value="lst-asc">Surface Temp LST (Cool to Hot)</option>
+                  <option value="uhi-desc">UHI Offset (Heat Trapping High)</option>
+                  <option value="name-asc">Zone Name (A to Z)</option>
+                  <option value="priority-desc">Cooling Priority (Emergency First)</option>
+                </select>
+              </div>
+
               {/* Search Bar */}
-              <div className="location-search-box" style={{ width: 220 }}>
+              <div className="location-search-box" style={{ width: 200 }}>
                 <Search size={14} color="#888" />
                 <input
                   type="text"
@@ -569,14 +660,56 @@ export default function RiskStratificationPage({
             <table className="hist-table hm-matrix-table">
               <thead>
                 <tr>
-                  <th>Zone & Location</th>
-                  <th>Severity Tier</th>
-                  <th>{riskMode === 'dataset' ? 'Exact LST (Observed)' : 'Surface Temp (LST)'}</th>
-                  <th>{riskMode === 'dataset' ? 'PINN Pred. LST' : 'Ambient Temp'}</th>
-                  <th>{riskMode === 'dataset' ? 'NDVI (Vegetation)' : 'UHI Offset'}</th>
+                  <th className="sortable-th" onClick={() => toggleSort('name')} title="Click to sort by Name">
+                    <span className="sortable-th-inner">
+                      Zone & Location
+                      {sortField === 'name' && (
+                        <span className="sort-indicator">{sortOrder === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                    </span>
+                  </th>
+                  <th className="sortable-th" onClick={() => toggleSort('severity')} title="Click to sort by Severity">
+                    <span className="sortable-th-inner">
+                      Severity Tier
+                      {sortField === 'severity' && (
+                        <span className="sort-indicator">{sortOrder === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                    </span>
+                  </th>
+                  <th className="sortable-th" onClick={() => toggleSort('lst')} title="Click to sort by Surface Temp">
+                    <span className="sortable-th-inner">
+                      {riskMode === 'dataset' ? 'Exact LST (Observed)' : 'Surface Temp (LST)'}
+                      {sortField === 'lst' && (
+                        <span className="sort-indicator">{sortOrder === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                    </span>
+                  </th>
+                  <th className="sortable-th" onClick={() => toggleSort('pinn')} title="Click to sort by Modeled/Ambient">
+                    <span className="sortable-th-inner">
+                      {riskMode === 'dataset' ? 'PINN Pred. LST' : 'Ambient Temp'}
+                      {sortField === 'pinn' && (
+                        <span className="sort-indicator">{sortOrder === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                    </span>
+                  </th>
+                  <th className="sortable-th" onClick={() => toggleSort('uhi')} title="Click to sort by UHI Offset">
+                    <span className="sortable-th-inner">
+                      {riskMode === 'dataset' ? 'NDVI (Vegetation)' : 'UHI Offset'}
+                      {sortField === 'uhi' && (
+                        <span className="sort-indicator">{sortOrder === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                    </span>
+                  </th>
                   <th>{riskMode === 'dataset' ? 'NDBI (Built-up)' : 'Population Density'}</th>
                   <th>Key Landmark / Microclimate Node</th>
-                  <th>Cooling Intervention Priority</th>
+                  <th className="sortable-th" onClick={() => toggleSort('priority')} title="Click to sort by Priority">
+                    <span className="sortable-th-inner">
+                      Cooling Intervention Priority
+                      {sortField === 'priority' && (
+                        <span className="sort-indicator">{sortOrder === 'desc' ? '▼' : '▲'}</span>
+                      )}
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -608,8 +741,12 @@ export default function RiskStratificationPage({
                     <Fragment key={meta.loc.id}>
                       <tr
                         className={`hist-row ${isSelected ? 'active-zone-row' : ''} ${isHigh ? 'hot-row' : ''}`}
-                        onClick={() => handleSelectLoc(meta.loc)}
+                        onClick={() => {
+                          handleSelectLoc(meta.loc)
+                          setModalMeta(meta)
+                        }}
                         style={{ cursor: 'pointer' }}
+                        title="Click to select location and open Explainable AI diagnostic verdict"
                       >
                         <td className="hist-date-cell">
                           <strong>{meta.loc.name} {isSelected && <span className="active-tag">ACTIVE</span>}</strong>
@@ -621,11 +758,13 @@ export default function RiskStratificationPage({
                             aria-controls={`risk-explanation-${meta.loc.id}`}
                             onClick={event => {
                               event.stopPropagation()
-                              setExpandedExplanationId(explanationOpen ? null : meta.loc.id)
+                              handleSelectLoc(meta.loc)
+                              setModalMeta(meta)
                             }}
+                            title="Open Explainable AI Modal"
                           >
                             <Sparkles size={12} />
-                            {explanationOpen ? 'Hide explanation' : 'Why this risk?'}
+                            Why this risk? (XAI)
                             <ChevronDown size={12} className={explanationOpen ? 'rotated' : ''} />
                           </button>
                         </td>
@@ -1070,6 +1209,152 @@ export default function RiskStratificationPage({
           </div>
         </div>
       </div>
+
+      {/* ═══════════ EXPLAINABLE AI "WHY THIS RISK?" MODAL ═══════════ */}
+      {modalMeta && modalVerdict && (
+        <div
+          className="xai-modal-backdrop"
+          onClick={() => setModalMeta(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="xai-modal-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="xai-modal-header">
+              <div className="xai-modal-title-group">
+                <Sparkles size={20} style={{ color: '#e86631', flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <h3>{modalMeta.loc.name}</h3>
+                    <span className={`event-badge ${modalMeta.severity.toLowerCase()}`}>
+                      {modalMeta.severity === 'High' ? '🔴 HIGH RISK' : modalMeta.severity === 'Moderate' ? '🟠 MODERATE' : '🟢 LOW RISK'}
+                    </span>
+                  </div>
+                  <p>{modalMeta.loc.ward} · {modalMeta.loc.zoneNumber} · {modalMeta.loc.type}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="xai-modal-close-btn"
+                onClick={() => setModalMeta(null)}
+                aria-label="Close modal"
+                title="Close modal (Esc)"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Body with Concise XAI Content */}
+            <div className="xai-modal-body">
+              {/* Quick Key Metrics Strip */}
+              <div className="xai-modal-metrics-strip">
+                <div className="xai-metric-box">
+                  <span>Surface Temp (LST)</span>
+                  <strong style={{ color: modalMeta.severity === 'High' ? '#dc2626' : modalMeta.severity === 'Moderate' ? '#d97706' : '#16a34a' }}>
+                    {modalMeta.lst}°C
+                  </strong>
+                  <small>
+                    {modalMeta.lst - explainabilityBenchmarks.avgLST >= 0 ? '+' : ''}
+                    {(modalMeta.lst - explainabilityBenchmarks.avgLST).toFixed(1)}°C vs Thane avg
+                  </small>
+                </div>
+                <div className="xai-metric-box">
+                  <span>PINN Modeled LST</span>
+                  <strong style={{ color: '#2563eb' }}>
+                    {modalMeta.pinnPredictedLST != null ? `${modalMeta.pinnPredictedLST.toFixed(1)}°C` : `${modalMeta.ambientTemp}°C`}
+                  </strong>
+                  <small>{modalMeta.pinnPredictedLST != null ? 'Physics-informed AI' : 'Ambient offset'}</small>
+                </div>
+                <div className="xai-metric-box">
+                  <span>Microclimate / Node</span>
+                  <strong style={{ fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {modalMeta.loc.keyLandmark}
+                  </strong>
+                  <small>UHI Offset: {modalMeta.loc.lstOffset >= 0 ? `+${modalMeta.loc.lstOffset}` : modalMeta.loc.lstOffset}°C</small>
+                </div>
+              </div>
+
+              {/* Diagnostic Summary (Why This Risk?) */}
+              <div className={`xai-verdict-banner ${modalMeta.severity.toLowerCase()}`}>
+                <div className="xai-verdict-heading">
+                  <Sparkles size={13} />
+                  <span>Explainable AI · Why This Risk Verdict?</span>
+                </div>
+                <p className="xai-verdict-text">{modalVerdict.verdict}</p>
+              </div>
+
+              {/* Physics-Informed Key Risk Factors */}
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 7 }}>
+                  🔍 Key Physics Risk Drivers (Deviations vs Thane Mean)
+                </div>
+                <div className="xai-drivers-grid">
+                  <div className="xai-driver-card">
+                    <div className="xai-driver-top">
+                      <strong>🌿 Vegetation Deficit (NDVI)</strong>
+                      <span className={`xai-driver-tag ${(modalMeta.ndvi ?? 0.265) < explainabilityBenchmarks.avgNDVI ? 'risk' : 'protect'}`}>
+                        {(modalMeta.ndvi ?? 0.265) < explainabilityBenchmarks.avgNDVI ? '▲ Risk Factor' : '▼ Protective'}
+                      </span>
+                    </div>
+                    <p className="xai-driver-desc">
+                      NDVI is <strong>{modalMeta.ndvi?.toFixed(3) ?? '0.265'}</strong> (City Ref: {explainabilityBenchmarks.avgNDVI.toFixed(3)}).{' '}
+                      {(modalMeta.ndvi ?? 0.265) < explainabilityBenchmarks.avgNDVI
+                        ? 'Sparse canopy reduces evapotranspiration cooling.'
+                        : 'Abundant tree canopy buffers ambient heat.'}
+                    </p>
+                  </div>
+
+                  <div className="xai-driver-card">
+                    <div className="xai-driver-top">
+                      <strong>🏢 Built-up Density (NDBI)</strong>
+                      <span className={`xai-driver-tag ${(modalMeta.ndbi ?? 0.001) > explainabilityBenchmarks.avgNDBI ? 'risk' : 'protect'}`}>
+                        {(modalMeta.ndbi ?? 0.001) > explainabilityBenchmarks.avgNDBI ? '▲ Heat Trapping' : '▼ Moderate'}
+                      </span>
+                    </div>
+                    <p className="xai-driver-desc">
+                      NDBI is <strong>{modalMeta.ndbi?.toFixed(3) ?? '0.001'}</strong> (City Ref: {explainabilityBenchmarks.avgNDBI.toFixed(3)}).{' '}
+                      {(modalMeta.ndbi ?? 0.001) > explainabilityBenchmarks.avgNDBI
+                        ? 'High impervious concrete and asphalt trap solar heat.'
+                        : 'Lower building density allows better ventilation.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Immediate Targeted Cooling Strategy */}
+              <div className="xai-action-box">
+                <ShieldAlert size={18} style={{ color: '#e86631', flexShrink: 0, marginTop: 2 }} />
+                <div className="xai-action-content">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                    <strong>Recommended Cooling Intervention</strong>
+                    <span className={`hm-prio-pill ${modalMeta.coolingPriority.toLowerCase()}`}>
+                      {modalMeta.coolingPriority === 'Emergency' ? '⚡ Emergency Misting' : modalMeta.coolingPriority === 'High' ? '● Shaded Corridors' : '○ Protected Canopy'}
+                    </span>
+                  </div>
+                  <p>{modalMeta.recommendedAction}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="xai-modal-footer">
+              <span className="xai-screen-hint">
+                💡 Click anywhere outside on the screen or press ESC to go back
+              </span>
+              <button
+                type="button"
+                className="xai-done-btn"
+                onClick={() => setModalMeta(null)}
+              >
+                Back to Matrix
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

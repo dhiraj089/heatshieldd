@@ -2,9 +2,12 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, AlertTriangle, ArrowRight, BarChart3, Bell, Boxes, Building, Calendar, Check, CheckCircle2, ChevronDown, Clock, CloudRain, Code2, Compass, Cpu, Crosshair, Database, DollarSign, Download, Droplets, Eye, Filter, Flame, Gauge, Info, Layers, Layers3, MapPin, Maximize2, Menu, Navigation, Network, Pause, Play, Radio, RefreshCw, RotateCw, Search, Server, Settings2, Share2, ShieldAlert, ShieldCheck, Sliders, Sparkles, Sun, Terminal, Thermometer, TreePine, TrendingDown, Waves, Wind, Workflow, X, Zap, ZoomIn, ZoomOut } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import HistoricalPage from '@/components/HistoricalPage'
 import RiskStratificationPage from '@/components/RiskStratificationPage'
 import AnalyticsPage from '@/components/analytics/AnalyticsPage'
+
+const IntroAnimation = dynamic(() => import('@/components/IntroAnimation'), { ssr: false })
 import {
   PINN_BENCHMARK,
   THANE_DATASET_RECORDS,
@@ -4993,6 +4996,7 @@ function GenericPage({
 }
 
 export default function Page() {
+  const [showIntro, setShowIntro] = useState(true)
   const [active, setActive] = useState('Analytics')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [alert, setAlert] = useState(true)
@@ -5075,7 +5079,9 @@ export default function Page() {
                 )
 
   return (
-    <div className="app-shell">
+    <>
+      {showIntro && <IntroAnimation onComplete={() => setShowIntro(false)} />}
+      <div className="app-shell">
       <Sidebar
         active={active}
         setActive={(s) => {
@@ -5108,6 +5114,25 @@ export default function Page() {
             <MapPin size={12} /> {selectedLocation.name} ({selectedLocation.zoneNumber})
           </span>
           <div className="header-actions">
+            <button
+              aria-label="Play 3D Intro"
+              title="Watch 3D Intro Animation"
+              onClick={() => setShowIntro(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                width: 'auto',
+                padding: '0 10px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#e86631',
+                borderColor: '#e86631',
+              }}
+            >
+              <Play size={11} fill="#e86631" />
+              <span>Intro</span>
+            </button>
             <button aria-label="Search"><Search size={18} /></button>
             <button aria-label="Notifications"><Bell size={18} /><i /></button>
           </div>
@@ -5119,6 +5144,7 @@ export default function Page() {
         </footer>
       </main>
     </div>
+    </>
   )
 }
 
