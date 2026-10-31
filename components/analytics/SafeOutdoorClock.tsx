@@ -28,19 +28,19 @@ export default function SafeOutdoorClock({ location, time }: SafeOutdoorClockPro
       : `Recommended for municipal crews and outdoor logistics in ${location.name}`
 
   return (
-    <div className="bg-white rounded-[12px] p-5 shadow-sm border border-[#E8E2D8] flex flex-col justify-between transition-all h-full">
+    <div className="bg-[var(--color-surface)] rounded-[12px] p-5 shadow-sm border border-[rgba(16,16,16,0.15)] flex flex-col justify-between transition-all h-full">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#F0EBE1] mb-3">
+      <div className="flex items-center justify-between pb-3 border-b border-[rgba(16,16,16,0.15)] mb-3">
         <div>
-          <h3 className="text-base font-bold text-[#1A1A1A] tracking-tight">
+          <h3 className="text-base font-bold text-[#101010] tracking-tight">
             Safe Outdoor Hours · {location.name}
           </h3>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-[rgba(16,16,16,0.65)]">
             Advisory for outdoor workers & civic crews
           </p>
         </div>
         <span
-          className="text-xs font-mono font-bold text-[#EA580C] bg-[#FFF7ED] px-2.5 py-1 rounded-full border border-[#FED7AA]"
+          className="text-xs font-mono font-bold text-[#D5360C] bg-[var(--color-bg-soft)] px-2.5 py-1 rounded-full border border-[rgba(16,16,16,0.15)]"
           suppressHydrationWarning
         >
           {time.timeShort} IST
@@ -52,29 +52,29 @@ export default function SafeOutdoorClock({ location, time }: SafeOutdoorClockPro
         {/* Analog Clock SVG */}
         <div className="relative w-20 h-20 shrink-0 bg-[#FAF8F5] rounded-full border-2 border-[#E5E0D8] shadow-inner flex items-center justify-center">
           {/* Clock numbers */}
-          <span className="absolute top-1 text-[9px] font-extrabold text-[#9CA3AF]">12</span>
-          <span className="absolute right-1 text-[9px] font-extrabold text-[#9CA3AF]">3</span>
-          <span className="absolute bottom-1 text-[9px] font-extrabold text-[#9CA3AF]">6</span>
-          <span className="absolute left-1 text-[9px] font-extrabold text-[#9CA3AF]">9</span>
+          <span className="absolute top-1 text-[9px] font-extrabold text-[rgba(16,16,16,0.65)]">12</span>
+          <span className="absolute right-1 text-[9px] font-extrabold text-[rgba(16,16,16,0.65)]">3</span>
+          <span className="absolute bottom-1 text-[9px] font-extrabold text-[rgba(16,16,16,0.65)]">6</span>
+          <span className="absolute left-1 text-[9px] font-extrabold text-[rgba(16,16,16,0.65)]">9</span>
 
           {/* Clock Hands */}
           <div
-            className="absolute w-0.5 h-6 bg-[#EA580C] rounded-full origin-bottom bottom-10 left-[39px] transition-transform duration-500"
+            className="absolute w-0.5 h-6 bg-[#D5360C] rounded-full origin-bottom bottom-10 left-[39px] transition-transform duration-500"
             style={{ transform: `rotate(${time.clockAngle}deg)` }}
           />
           <div
-            className="absolute w-1 h-4 bg-[#1A1A1A] rounded-full origin-bottom bottom-10 left-[38px] transition-transform duration-500"
+            className="absolute w-1 h-4 bg-[#101010] rounded-full origin-bottom bottom-10 left-[38px] transition-transform duration-500"
             style={{ transform: `rotate(${(time.hour % 12) * 30 + 10}deg)` }}
           />
-          <div className="w-2 h-2 rounded-full bg-[#1A1A1A] z-10" />
+          <div className="w-2 h-2 rounded-full bg-[#101010] z-10" />
         </div>
 
         {/* Advisory Text */}
         <div className="flex-1">
-          <strong className="text-sm sm:text-base font-extrabold text-[#1A1A1A] block leading-tight">
+          <strong className="text-sm sm:text-base font-extrabold text-[#101010] block leading-tight">
             {safeHoursLabel}
           </strong>
-          <p className="text-xs text-[#6B7280] mt-1 leading-snug">
+          <p className="text-xs text-[rgba(16,16,16,0.65)] mt-1 leading-snug">
             {safeHoursSubtitle}
           </p>
         </div>
@@ -82,7 +82,7 @@ export default function SafeOutdoorClock({ location, time }: SafeOutdoorClockPro
 
       {/* Recommended Time Windows */}
       <div className="bg-[#FAF8F5] p-2.5 rounded-[8px] border border-[#EBE6DC] text-xs">
-        <span className="text-[10px] uppercase font-bold text-[#6B7280] tracking-wider block mb-0.5">
+        <span className="text-[10px] uppercase font-bold text-[rgba(16,16,16,0.65)] tracking-wider block mb-0.5">
           Recommended Work Windows
         </span>
         <strong className="text-xs font-semibold text-[#16A34A] block">

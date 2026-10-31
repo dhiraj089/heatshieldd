@@ -987,16 +987,16 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
   }, [])
 
   const LETTER_COLORS = [
-    '#ff3d2e',
-    '#ff5a1f',
-    '#ff8a1f',
-    '#ffb020',
-    '#d9fbff',
-    '#b4f3ff',
-    '#8fe8ff',
-    '#6bdcff',
-    '#8fe8ff',
-    '#d9fbff',
+    '#D5360C',
+    '#B82D09',
+    '#D5360C',
+    '#EDA389',
+    '#F4EADA',
+    '#E6D5BD',
+    '#F4EADA',
+    '#EFE2CF',
+    '#E6D5BD',
+    '#F4EADA',
   ]
 
   return (
@@ -1060,7 +1060,7 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
           <div className="line" />
           <p>Optimizing Urban Heat Mitigation and Cooling Strategies via AI/ML</p>
 
-          {/* Enter Dashboard Action Button (glowing CTA) */}
+          {/* Enter Dashboard Action Button */}
           <div
             className="enter-action-wrap"
             style={{
@@ -1078,17 +1078,17 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
                 alignItems: 'center',
                 gap: '10px',
                 padding: '13px 32px',
-                borderRadius: '999px',
-                background: 'linear-gradient(135deg, rgba(255, 74, 42, 0.95), rgba(98, 212, 255, 0.88))',
-                color: '#ffffff',
+                borderRadius: '8px',
+                background: '#D5360C',
+                color: '#F4EADA',
                 fontSize: '13px',
-                fontWeight: 700,
-                letterSpacing: '0.14em',
+                fontWeight: 800,
+                letterSpacing: '0.12em',
                 textTransform: 'uppercase',
-                border: '1px solid rgba(255,255,255,0.45)',
+                border: '1.5px solid #101010',
                 cursor: 'pointer',
-                boxShadow: '0 0 30px rgba(255, 74, 42, 0.55), 0 0 15px rgba(98, 212, 255, 0.4)',
-                transition: 'all 0.28s ease',
+                boxShadow: '4px 4px 0 #101010',
+                transition: 'all 0.18s ease',
               }}
             >
               <span>Enter HeatShield Platform</span>
@@ -1123,21 +1123,21 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
           <span>Replay</span>
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (isTitleShown) {
-              handleEnterDashboard()
-            } else if (skipToTitleRef.current) {
-              skipToTitleRef.current()
-            }
-          }}
-          className="intro-btn"
-          id="skip"
-        >
-          <FastForward size={12} />
-          <span>{isTitleShown ? 'Enter App' : 'Skip'}</span>
-        </button>
+        {!isTitleShown && (
+          <button
+            type="button"
+            onClick={() => {
+              if (skipToTitleRef.current) {
+                skipToTitleRef.current()
+              }
+            }}
+            className="intro-btn"
+            id="skip"
+          >
+            <FastForward size={12} />
+            <span>Skip</span>
+          </button>
+        )}
       </div>
     </div>
   )

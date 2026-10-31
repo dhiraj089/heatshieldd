@@ -1,10 +1,25 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import { Fraunces, DM_Sans } from 'next/font/google'
 import './globals.css'
+
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  weight: ['700', '800', '900'],
+  variable: '--font-heading',
+  display: 'swap',
+})
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-body',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'HeatShield · Thane City',
-  description: 'Live urban heat, air quality, rainfall, and waterlogging intelligence for Thane City.',
+  description: 'Next-Gen Urban Heat Island Defense & Microclimate Intelligence for Thane City.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -26,11 +41,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'light',
+  themeColor: '#E6D5BD',
 }
 
 export default function RootLayout({
@@ -39,13 +51,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@800;900&family=Rajdhani:wght@500;600;700&display=swap" />
-      </head>
-      <body className="antialiased">
+    <html lang="en" className={`${fraunces.variable} ${dmSans.variable}`}>
+      <body className="antialiased bg-[var(--color-bg)] text-[var(--color-ink)]">
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

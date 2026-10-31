@@ -30,24 +30,24 @@ export default function RainfallWindCard({ location, weather }: RainfallWindCard
   })
 
   return (
-    <div className="bg-white rounded-[12px] p-5 shadow-sm border border-[#E8E2D8] flex flex-col justify-between transition-all h-full">
+    <div className="bg-[var(--color-surface)] rounded-[12px] p-5 shadow-sm border border-[rgba(16,16,16,0.15)] flex flex-col justify-between transition-all h-full">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-[#F0EBE1] mb-3">
+      <div className="flex items-start justify-between gap-3 pb-3 border-b border-[rgba(16,16,16,0.15)] mb-3">
         <div>
-          <h3 className="text-base font-bold text-[#1A1A1A] tracking-tight">
+          <h3 className="text-base font-bold text-[#101010] tracking-tight">
             Rainfall & Wind Telemetry · {location.name}
           </h3>
-          <p className="text-xs text-[#6B7280]">
+          <p className="text-xs text-[rgba(16,16,16,0.65)]">
             Precipitation and surface wind velocity in {location.name}
           </p>
         </div>
-        <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-[var(--color-bg-soft)] border border-[var(--color-bg-soft)] flex items-center justify-center text-[#D5360C] shrink-0">
           <Navigation size={18} className="transform rotate-45" />
         </div>
       </div>
 
       {/* Wind Metric Callout */}
-      <div className="flex items-center justify-between bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-3.5 py-2 mb-3">
+      <div className="flex items-center justify-between bg-[var(--color-bg-soft)] border border-[rgba(16,16,16,0.15)] rounded-[8px] px-3.5 py-2 mb-3">
         <div className="flex items-center gap-2">
           <Wind size={18} className="text-[#0284C7]" />
           <div>
@@ -68,25 +68,25 @@ export default function RainfallWindCard({ location, weather }: RainfallWindCard
       <div className="w-full h-[140px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rainData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1EFE9" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,16,16,0.08)" vertical={false} />
             <XAxis
               dataKey="time"
               tickLine={false}
-              axisLine={{ stroke: '#E8E2D8' }}
-              tick={{ fill: '#9CA3AF', fontSize: 10 }}
+              axisLine={{ stroke: 'rgba(16,16,16,0.15)' }}
+              tick={{ fill: 'rgba(16,16,16,0.65)', fontSize: 10 }}
             />
             <YAxis
               tickLine={false}
               axisLine={false}
-              tick={{ fill: '#9CA3AF', fontSize: 10 }}
+              tick={{ fill: 'rgba(16,16,16,0.65)', fontSize: 10 }}
               tickFormatter={(v) => `${v}m`}
             />
             <Tooltip
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
                   return (
-                    <div className="bg-[#1A1A1A] text-white p-2 rounded-lg shadow-lg text-xs">
-                      <p className="text-[#9CA3AF]">{label}</p>
+                    <div className="bg-[#101010] text-white p-2 rounded-lg shadow-lg text-xs">
+                      <p className="text-[rgba(16,16,16,0.65)]">{label}</p>
                       <p className="font-bold text-[#38BDF8]">
                         {payload[0].value} mm rain
                       </p>
@@ -98,7 +98,7 @@ export default function RainfallWindCard({ location, weather }: RainfallWindCard
             />
             <Bar
               dataKey="rain"
-              fill="#2563EB"
+              fill="#D5360C"
               radius={[4, 4, 0, 0]}
               maxBarSize={20}
             />
@@ -107,9 +107,9 @@ export default function RainfallWindCard({ location, weather }: RainfallWindCard
       </div>
 
       {/* Footer info */}
-      <div className="flex items-center justify-between text-[11px] text-[#6B7280] pt-2 border-t border-[#F0EBE1] mt-2">
+      <div className="flex items-center justify-between text-[11px] text-[rgba(16,16,16,0.65)] pt-2 border-t border-[rgba(16,16,16,0.15)] mt-2">
         <span>24h Rainfall Accumulation</span>
-        <strong className="text-[#1A1A1A] font-bold">{weather.precipitation} mm total</strong>
+        <strong className="text-[#101010] font-bold">{weather.precipitation} mm total</strong>
       </div>
     </div>
   )
